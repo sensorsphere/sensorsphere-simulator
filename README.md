@@ -206,3 +206,27 @@ Scenario configuration is read-only while status is RUNNING or PAUSED.
 - PAUSED: Resume and Stop remain available.
 - Editing, deletion, validation, ramp generation and action changes are locked.
 - The API also rejects edits with HTTP 409 until the scenario is stopped.
+
+
+## SIM-011 scenario completion and runtime restore
+
+SIM-011 snapshots each metric controlled by a scenario before execution.
+
+When the scenario reaches `COMPLETED` or is explicitly `STOPPED`, the original
+Basic Injection state is restored:
+
+- value
+- enabled state
+- mode
+- random/ramp/timeline generator configuration
+
+This means a scenario's final `SET_VALUE` no longer becomes the permanent
+Basic Injection value.
+
+The scenario UI also displays:
+
+- `Started at`
+- `Expected end`
+- `Elapsed`
+
+`Expected end` is derived from the largest action offset.

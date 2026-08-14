@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-010";
+  ?? "SIM-011";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "010";
+  ?? "011";
 
 const defaultState = {
   sensors: [{
@@ -54,6 +54,7 @@ async function loadState() {
       scenario.startedAt = null;
       scenario.pausedAt = null;
       scenario.elapsedBeforePause = 0;
+      scenario.runtimeSnapshot = null;
 
       for (const action of scenario.actions ?? []) {
         if (!action.sensorUid && action.sensorId) {
@@ -134,7 +135,19 @@ function publicState() {
     },
 
     sensors: state.sensors,
-    scenarios: state.scenarios,
+
+    scenarios:
+      state.scenarios.map(
+        scenario => ({
+          ...scenario,
+
+          expectedDurationSeconds:
+            scenarioExpectedDurationSeconds(
+              scenario
+            )
+        })
+      ),
+
     scenarioLocks:
       activeScenarioLocks(),
     logs: state.logs.slice(0, LOG_LIMIT)
@@ -446,6 +459,202 @@ function restartIfRunning(sensor, wasRunning) {
   if (wasRunning) startSensor(sensor);
 }
 
+function scenarioExpectedDurationSeconds(
+  scenario
+) {
+  const offsets =
+    (scenario.actions ?? [])
+      .map(
+        action =>
+          Math.max(
+            0,
+            Number(
+              action.offsetSeconds
+            ) || 0
+          )
+      );
+
+  return offsets.length > 0
+    ? Math.max(
+        ...offsets
+      )
+    : 0;
+}
+
+function captureScenarioRuntimeSnapshot(
+  scenario
+) {
+  const seen =
+    new Set();
+
+  const snapshot = [];
+
+  for (
+    const action
+    of scenario.actions ?? []
+  ) {
+    if (
+      !action.sensorUid ||
+      !action.metricKey ||
+      ![
+        "SET_VALUE",
+        "ENABLE_METRIC",
+        "DISABLE_METRIC"
+      ].includes(
+        action.type
+      )
+    ) {
+      continue;
+    }
+
+    const key =
+      `${action.sensorUid}\u0000${action.metricKey}`;
+
+    if (
+      seen.has(
+        key
+      )
+    ) {
+      continue;
+    }
+
+    seen.add(
+      key
+    );
+
+    const sensor =
+      state.sensors.find(
+        current =>
+          current.uid ===
+            action.sensorUid
+      );
+
+    const metric =
+      sensor?.metrics.find(
+        current =>
+          current.key ===
+            action.metricKey
+      );
+
+    if (!metric) {
+      continue;
+    }
+
+    snapshot.push({
+      sensorUid:
+        sensor.uid,
+
+      metricKey:
+        metric.key,
+
+      value:
+        String(
+          metric.value ?? ""
+        ),
+
+      enabled:
+        Boolean(
+          metric.enabled
+        ),
+
+      mode:
+        metric.mode
+        ?? "manual",
+
+      randomMin:
+        metric.randomMin,
+
+      randomMax:
+        metric.randomMax,
+
+      rampStart:
+        metric.rampStart,
+
+      rampEnd:
+        metric.rampEnd,
+
+      rampStep:
+        metric.rampStep,
+
+      rampDirection:
+        metric.rampDirection,
+
+      timeline:
+        metric.timeline,
+
+      timelineStartedAt:
+        metric.timelineStartedAt
+    });
+  }
+
+  scenario.runtimeSnapshot =
+    snapshot;
+}
+
+function restoreScenarioRuntimeSnapshot(
+  scenario
+) {
+  for (
+    const item
+    of scenario.runtimeSnapshot
+    ?? []
+  ) {
+    const sensor =
+      state.sensors.find(
+        current =>
+          current.uid ===
+            item.sensorUid
+      );
+
+    const metric =
+      sensor?.metrics.find(
+        current =>
+          current.key ===
+            item.metricKey
+      );
+
+    if (!metric) {
+      continue;
+    }
+
+    metric.value =
+      item.value;
+
+    metric.enabled =
+      item.enabled;
+
+    metric.mode =
+      item.mode;
+
+    metric.randomMin =
+      item.randomMin;
+
+    metric.randomMax =
+      item.randomMax;
+
+    metric.rampStart =
+      item.rampStart;
+
+    metric.rampEnd =
+      item.rampEnd;
+
+    metric.rampStep =
+      item.rampStep;
+
+    metric.rampDirection =
+      item.rampDirection;
+
+    metric.timeline =
+      item.timeline;
+
+    metric.timelineStartedAt =
+      item.timelineStartedAt;
+  }
+
+  scenario.runtimeSnapshot =
+    null;
+}
+
 function scenarioElapsedSeconds(
   scenario
 ) {
@@ -732,6 +941,10 @@ async function scenarioTick(
     );
 
   if (!pending) {
+    restoreScenarioRuntimeSnapshot(
+      scenario
+    );
+
     scenario.status =
       "COMPLETED";
 
@@ -945,6 +1158,10 @@ function startScenario(
     return validation;
   }
 
+  captureScenarioRuntimeSnapshot(
+    scenario
+  );
+
   const previous =
     scenarioTimers.get(
       scenario.id
@@ -1065,6 +1282,10 @@ function resumeScenario(
 function stopScenario(
   scenario
 ) {
+  restoreScenarioRuntimeSnapshot(
+    scenario
+  );
+
   const timer =
     scenarioTimers.get(
       scenario.id

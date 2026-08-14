@@ -251,6 +251,44 @@ function renderSensors() {
 
 }
 
+function formatScenarioDuration(
+  totalSeconds
+) {
+  const seconds =
+    Math.max(
+      0,
+      Number(
+        totalSeconds
+      ) || 0
+    );
+
+  const minutes =
+    Math.floor(
+      seconds /
+      60
+    );
+
+  const remaining =
+    seconds %
+    60;
+
+  return `${minutes} min ${remaining} sec`;
+}
+
+function formatScenarioStartedAt(
+  scenario
+) {
+  if (
+    !scenario.startedAt
+  ) {
+    return "—";
+  }
+
+  return new Date(
+    scenario.startedAt
+  ).toLocaleString();
+}
+
 function scenarioElapsed(
   scenario
 ) {
@@ -410,9 +448,25 @@ function renderScenarios() {
                 ${esc(scenario.status)}
               </span>
 
-              <span class="scenario-elapsed">
-                ${elapsed}s
-              </span>
+              <div class="scenario-runtime-info">
+                <span>
+                  <strong>Started at:</strong>
+                  ${esc(formatScenarioStartedAt(scenario))}
+                </span>
+
+                <span>
+                  <strong>Expected end:</strong>
+                  ${esc(formatScenarioDuration(
+                    scenario.expectedDurationSeconds
+                    ?? 0
+                  ))}
+                </span>
+
+                <span class="scenario-elapsed">
+                  <strong>Elapsed:</strong>
+                  ${elapsed}s
+                </span>
+              </div>
 
               ${
                 !locked

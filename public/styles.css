@@ -518,3 +518,25 @@ button:active{
   font-size:12px;
   font-weight:700;
 }
+
+/* SIM-011 scenario runtime timing */
+.scenario-runtime-info{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:190px;
+  padding:5px 8px;
+  border-radius:7px;
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  color:#475569;
+  font-size:11px;
+  line-height:1.35;
+}
+.scenario-runtime-info strong{
+  color:#334155;
+}
+.scenario-runtime-info .scenario-elapsed{
+  min-width:0;
+  text-align:left;
+}
