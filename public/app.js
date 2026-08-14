@@ -57,6 +57,137 @@ async function api(url, options={}) {
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+const COLLAPSE_STORAGE_KEY =
+  "sensorsphere.simulator.collapsed.v1";
+
+function loadCollapsedState() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          COLLAPSE_STORAGE_KEY
+        ) || "{}"
+      );
+
+    return {
+      sensors:
+        new Set(
+          Array.isArray(
+            parsed.sensors
+          )
+            ? parsed.sensors
+            : []
+        ),
+
+      scenarios:
+        new Set(
+          Array.isArray(
+            parsed.scenarios
+          )
+            ? parsed.scenarios
+            : []
+        )
+    };
+  } catch {
+    return {
+      sensors:
+        new Set(),
+
+      scenarios:
+        new Set()
+    };
+  }
+}
+
+const collapsedState =
+  loadCollapsedState();
+
+function saveCollapsedState() {
+  try {
+    localStorage.setItem(
+      COLLAPSE_STORAGE_KEY,
+      JSON.stringify({
+        sensors:
+          [...collapsedState.sensors],
+
+        scenarios:
+          [...collapsedState.scenarios]
+      })
+    );
+  } catch {}
+}
+
+function isCollapsed(
+  type,
+  id
+) {
+  return collapsedState[
+    type
+  ].has(
+    id
+  );
+}
+
+function toggleCollapsed(
+  type,
+  id
+) {
+  const values =
+    collapsedState[
+      type
+    ];
+
+  if (
+    values.has(
+      id
+    )
+  ) {
+    values.delete(
+      id
+    );
+  } else {
+    values.add(
+      id
+    );
+  }
+
+  saveCollapsedState();
+
+  if (
+    type ===
+    "sensors"
+  ) {
+    renderSensors();
+  } else {
+    renderScenarios();
+  }
+}
+
+function collapseButton(
+  type,
+  id
+) {
+  const collapsed =
+    isCollapsed(
+      type,
+      id
+    );
+
+  return `
+    <button
+      class="btn-collapse"
+      type="button"
+      onclick="toggleCollapsed('${type}','${id}')"
+      title="${collapsed ? "Expand" : "Collapse"}"
+      aria-label="${collapsed ? "Expand" : "Collapse"}"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="${collapsed ? "m9 18 6-6-6-6" : "m6 9 6 6 6-6"}"/>
+      </svg>
+    </button>
+  `;
+}
+
 function isEditingForm() {
   const active =
     document.activeElement;
@@ -154,8 +285,15 @@ function renderStatus() {
 }
 
 function renderSensors() {
-  document.getElementById("sensors").innerHTML = current.sensors.map(sensor => `
-    <section class="sensor">
+  document.getElementById("sensors").innerHTML = current.sensors.map(sensor => {
+    const collapsed =
+      isCollapsed(
+        "sensors",
+        sensor.id
+      );
+
+    return `
+    <section class="sensor ${collapsed ? "is-collapsed" : ""}">
       <div class="sensor-head">
         <div class="grow">
           <h2>${esc(sensor.name)}</h2>
@@ -166,6 +304,12 @@ function renderSensors() {
             </span>
           </small>
         </div>
+
+        ${collapseButton(
+          "sensors",
+          sensor.id
+        )}
+
         <button
           class="${sensor.enabled?"btn-stop":"btn-start"}"
           onclick="sensorAction('${sensor.id}','${sensor.enabled?"stop":"start"}')"
@@ -186,6 +330,11 @@ function renderSensors() {
         </button>
         <button class="danger" onclick="deleteSensor('${sensor.id}')">Delete</button>
       </div>
+
+      <div
+        class="collapsible-body"
+        ${collapsed ? "hidden" : ""}
+      >
       <div class="config">
         <label>Name <input value="${esc(sensor.name)}" onchange="patchSensor('${sensor.id}',{name:this.value})"></label>
         <label>UID <input value="${esc(sensor.uid)}" onchange="patchSensor('${sensor.id}',{uid:this.value})"></label>
@@ -276,7 +425,9 @@ function renderSensors() {
         `).join("")}
       </div>
       <button class="addmetric" onclick="addMetric('${sensor.id}')">+ Add metric</button>
-    </section>`).join("");
+      </div>
+    </section>`;
+  }).join("");
 
 }
 
@@ -433,6 +584,12 @@ function renderScenarios() {
             scenario
           );
 
+        const collapsed =
+          isCollapsed(
+            "scenarios",
+            scenario.id
+          );
+
         const locked =
           scenario.status === "RUNNING" ||
           scenario.status === "PAUSED";
@@ -451,7 +608,7 @@ function renderScenarios() {
             );
 
         return `
-          <article class="scenario-card ${locked ? "scenario-locked" : ""}">
+          <article class="scenario-card ${locked ? "scenario-locked" : ""} ${collapsed ? "is-collapsed" : ""}">
 
             <div class="scenario-head">
               <div class="grow">
@@ -472,6 +629,11 @@ function renderScenarios() {
                 >
 
               </div>
+
+              ${collapseButton(
+                "scenarios",
+                scenario.id
+              )}
 
               <span class="scenario-status ${statusClass}">
                 ${esc(scenario.status)}
@@ -531,6 +693,11 @@ function renderScenarios() {
               }
 
             </div>
+
+            <div
+              class="collapsible-body"
+              ${collapsed ? "hidden" : ""}
+            >
 
             ${
               locked
@@ -697,6 +864,8 @@ function renderScenarios() {
                 ? `<button class="addmetric" onclick="addScenarioAction('${scenario.id}')">+ Add action</button>`
                 : ""
             }
+
+            </div>
 
           </article>
         `;

@@ -610,3 +610,39 @@ button:active{
   fill:currentColor;
   stroke:none;
 }
+
+/* SIM-019 collapsible cards */
+.btn-collapse{
+  width:30px;
+  height:30px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  background:#fff;
+  color:#475569;
+  cursor:pointer;
+}
+.btn-collapse:hover{
+  background:#f8fafc;
+  border-color:#94a3b8;
+}
+.btn-collapse svg{
+  width:16px;
+  height:16px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.collapsible-body[hidden]{
+  display:none !important;
+}
+.sensor.is-collapsed,
+.scenario-card.is-collapsed{
+  padding-bottom:12px;
+}

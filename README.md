@@ -305,3 +305,9 @@ At backend startup:
 - an INFO publication log entry records each automatic restart.
 
 This applies to backend/container restarts as long as the simulator data volume is preserved.
+
+## SIM-019 collapsible cards
+
+Basic Injection and Scenario cards can be collapsed independently. The card header
+and runtime/action controls remain visible while details are hidden. Collapse state
+is persisted per browser in localStorage and restored after refresh.

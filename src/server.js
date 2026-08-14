@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-018";
+  ?? "SIM-019";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "018";
+  ?? "019";
 
 const defaultState = {
   sensors: [{
