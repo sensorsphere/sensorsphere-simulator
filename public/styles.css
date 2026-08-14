@@ -540,3 +540,31 @@ button:active{
   min-width:0;
   text-align:left;
 }
+
+/* SIM-012 scenario-controlled Basic Injection metric */
+.metric-card.metric-scenario-locked{
+  position:relative;
+  background:#f1f5f9;
+  border-radius:8px;
+  padding-left:8px;
+  padding-right:8px;
+  opacity:.72;
+}
+.metric-card.metric-scenario-locked .metric-main,
+.metric-card.metric-scenario-locked .mode-config,
+.metric-card.metric-scenario-locked .topic{
+  filter:grayscale(.35);
+}
+.metric-card.metric-scenario-locked input:disabled,
+.metric-card.metric-scenario-locked select:disabled{
+  background:#e2e8f0;
+  color:#64748b;
+  cursor:not-allowed;
+}
+.metric-card.metric-scenario-locked .scenario-lock-banner{
+  opacity:1;
+  filter:none;
+  background:#ddd6fe;
+  border-color:#a78bfa;
+  color:#5b21b6;
+}

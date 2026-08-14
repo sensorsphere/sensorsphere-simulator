@@ -230,3 +230,21 @@ The scenario UI also displays:
 - `Elapsed`
 
 `Expected end` is derived from the largest action offset.
+
+
+## SIM-012 scenario controls and Basic Injection lock styling
+
+Scenario runtime controls are now displayed first:
+
+1. Start / Pause / Resume
+2. Stop
+3. Validate
+4. Generate ramp
+5. Delete
+
+In Basic Injection, a metric controlled by a RUNNING or PAUSED scenario is now
+fully greyed out and its controls are disabled. The banner also displays the
+scenario name controlling that metric.
+
+When the scenario ends or is stopped, the metric automatically returns to its
+normal editable appearance.

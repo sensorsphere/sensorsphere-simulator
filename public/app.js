@@ -187,25 +187,45 @@ function renderSensors() {
       </div>
       <div class="metrics">
         ${sensor.metrics.map(metric => `
-          <div class="metric-card">
+          ${
+            (() => {
+              const scenarioLock =
+                (current.scenarioLocks || []).find(
+                  lock =>
+                    lock.sensorUid === sensor.uid &&
+                    lock.metricKey === metric.key
+                );
+
+              const lockedByScenario =
+                Boolean(
+                  scenarioLock
+                );
+
+              const lockNames =
+                scenarioLock?.scenarios
+                  ?.map(
+                    scenario =>
+                      scenario.name
+                  )
+                  .join(", ")
+                ?? "";
+
+              return `
+          <div class="metric-card ${lockedByScenario ? "metric-scenario-locked" : ""}">
             ${
-              (current.scenarioLocks || []).some(
-                lock =>
-                  lock.sensorUid === sensor.uid &&
-                  lock.metricKey === metric.key
-              )
+              lockedByScenario
                 ? `<div class="scenario-lock-banner">
-                    Scenario controls ${esc(metric.key)} — basic injection paused for this metric
+                    Controlled by scenario: ${esc(lockNames || metric.key)}
                   </div>`
                 : ""
             }
 
             <div class="metric-main">
-              <input class="switch" type="checkbox" ${metric.enabled?"checked":""} onchange="patchMetric('${sensor.id}','${metric.id}',{enabled:this.checked})" title="Enable metric">
-              <input value="${esc(metric.key)}" onchange="patchMetric('${sensor.id}','${metric.id}',{key:this.value})" placeholder="metric key">
-              <input value="${esc(metric.value)}" onchange="patchMetric('${sensor.id}','${metric.id}',{value:this.value})" placeholder="value">
-              <input value="${esc(metric.unit)}" onchange="patchMetric('${sensor.id}','${metric.id}',{unit:this.value})" placeholder="unit">
-              <select onchange="patchMetric('${sensor.id}','${metric.id}',{mode:this.value})">
+              <input class="switch" type="checkbox" ${metric.enabled?"checked":""} ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{enabled:this.checked})" title="Enable metric">
+              <input value="${esc(metric.key)}" ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{key:this.value})" placeholder="metric key">
+              <input value="${esc(metric.value)}" ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{value:this.value})" placeholder="value">
+              <input value="${esc(metric.unit)}" ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{unit:this.value})" placeholder="unit">
+              <select ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{mode:this.value})">
                 <option value="manual" ${metric.mode==="manual"?"selected":""}>Manual</option>
                 <option value="random" ${metric.mode==="random"?"selected":""}>Random</option>
                 <option value="ramp" ${metric.mode==="ramp"?"selected":""}>Ramp</option>
@@ -244,7 +264,10 @@ function renderSensors() {
               </div>` : ""}
 
             <div class="topic">${esc(`sensors/ble_gateway/sensor/${metric.key}_${sensor.uid}/state`)}</div>
-          </div>`).join("")}
+          </div>`;
+            })()
+          }
+        `).join("")}
       </div>
       <button class="addmetric" onclick="addMetric('${sensor.id}')">+ Add metric</button>
     </section>`).join("");
@@ -469,15 +492,6 @@ function renderScenarios() {
               </div>
 
               ${
-                !locked
-                  ? `
-                    <button class="btn-validate" onclick="validateScenarioUi('${scenario.id}')">Validate</button>
-                    <button class="btn-ramp" onclick="openRampGenerator('${scenario.id}')">Generate ramp</button>
-                  `
-                  : ""
-              }
-
-              ${
                 scenario.status === "RUNNING"
                   ? `<button class="btn-pause" onclick="scenarioAction('${scenario.id}','pause')">Pause</button>`
                   : scenario.status === "PAUSED"
@@ -495,7 +509,11 @@ function renderScenarios() {
 
               ${
                 !locked
-                  ? `<button class="danger" onclick="deleteScenario('${scenario.id}')">Delete</button>`
+                  ? `
+                    <button class="btn-validate" onclick="validateScenarioUi('${scenario.id}')">Validate</button>
+                    <button class="btn-ramp" onclick="openRampGenerator('${scenario.id}')">Generate ramp</button>
+                    <button class="danger" onclick="deleteScenario('${scenario.id}')">Delete</button>
+                  `
                   : ""
               }
 
