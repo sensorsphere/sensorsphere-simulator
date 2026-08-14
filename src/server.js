@@ -11,6 +11,14 @@ const MQTT_URL = process.env.MQTT_URL ??
 const TOPIC_PREFIX = process.env.MQTT_TOPIC_PREFIX ?? "sensors/ble_gateway/sensor";
 const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
+const APP_VERSION =
+  process.env.SIMULATOR_VERSION
+  ?? "SIM-004";
+
+const BUILD_NUMBER =
+  process.env.SIMULATOR_BUILD
+  ?? "004";
+
 const defaultState = {
   sensors: [{
     id: crypto.randomUUID(),
@@ -65,10 +73,16 @@ async function saveState() {
 
 function publicState() {
   return {
+    application: {
+      version: APP_VERSION,
+      build: BUILD_NUMBER
+    },
+
     mqtt: {
       url: MQTT_URL.replace(/\/\/.*@/, "//***@"),
       connected: client.connected
     },
+
     sensors: state.sensors,
     logs: state.logs.slice(0, LOG_LIMIT)
   };
@@ -262,6 +276,35 @@ client.on("error", error => addLog({ status: "ERROR", message: `MQTT: ${error.me
 await loadState();
 
 const app = express();
+
+app.use(
+  (
+    _req,
+    res,
+    next
+  ) => {
+
+    // The simulator UI changes frequently during development.
+    // Prevent stale app.js/styles.css/index.html after rebuilds.
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+
+    res.setHeader(
+      "Pragma",
+      "no-cache"
+    );
+
+    res.setHeader(
+      "Expires",
+      "0"
+    );
+
+    next();
+  }
+);
+
 app.use(express.json());
 app.use(express.static("public"));
 
@@ -422,6 +465,11 @@ app.delete("/api/logs", async (_req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`SensorSphere Simulator listening on :${PORT}`);
-  console.log(`MQTT target: ${MQTT_URL}`);
+  console.log(
+    `SensorSphere Simulator ${APP_VERSION} build ${BUILD_NUMBER} listening on :${PORT}`
+  );
+
+  console.log(
+    `MQTT target: ${MQTT_URL}`
+  );
 });

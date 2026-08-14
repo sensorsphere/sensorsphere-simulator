@@ -83,3 +83,18 @@ Example timeline:
 
 Timeline mode is useful for automated validation of SensorSphere alert thresholds,
 `durationSeconds`, `cooldownSeconds`, `NO_DATA` and recovery behavior.
+
+
+## Build identification
+
+From SIM-004 onward, every Simulator patch increments both:
+
+```text
+SIMULATOR_VERSION=SIM-004
+SIMULATOR_BUILD=004
+```
+
+The value is visible in the application header and in container startup logs.
+
+The HTTP server also sends `no-store` cache headers for the development UI,
+to prevent stale JavaScript/CSS after rebuilding the container.

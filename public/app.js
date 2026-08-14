@@ -59,6 +59,19 @@ async function refresh() {
 }
 
 function renderStatus() {
+  const buildVersion =
+    document.getElementById(
+      "buildVersion"
+    );
+
+  if (
+    buildVersion &&
+    current.application
+  ) {
+    buildVersion.textContent =
+      `${current.application.version} · build ${current.application.build}`;
+  }
+
   const mqtt =
     document.getElementById(
       "mqtt"
