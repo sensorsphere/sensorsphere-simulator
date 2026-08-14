@@ -167,3 +167,14 @@ Start at: 0 seconds
 ```
 
 This generates 13 actions from 25.0 through 31.0.
+
+
+## SIM-008 ramp editor refresh protection
+
+An open Ramp Generator is now considered an active editing session even when
+no input currently has focus. Automatic polling continues to fetch API state
+and logs, but the scenario DOM is not rebuilt until the Ramp Generator is
+closed or a ramp has been generated.
+
+This prevents Start / End / Step / Every / Start-at values from being reset
+during editing.

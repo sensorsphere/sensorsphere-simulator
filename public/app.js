@@ -15,17 +15,30 @@ function isEditingForm() {
   const active =
     document.activeElement;
 
-  return Boolean(
-    active &&
-    (
-      active.tagName === "INPUT" ||
-      active.tagName === "SELECT" ||
-      active.tagName === "TEXTAREA"
-    ) &&
-    (
-      active.closest(".sensor") ||
-      active.closest(".scenario-card")
-    )
+  const focusedEditor =
+    Boolean(
+      active &&
+      (
+        active.tagName === "INPUT" ||
+        active.tagName === "SELECT" ||
+        active.tagName === "TEXTAREA"
+      ) &&
+      (
+        active.closest(".sensor") ||
+        active.closest(".scenario-card")
+      )
+    );
+
+  const openRampGenerator =
+    Boolean(
+      document.querySelector(
+        ".ramp-generator:not([hidden])"
+      )
+    );
+
+  return (
+    focusedEditor ||
+    openRampGenerator
   );
 }
 
@@ -910,6 +923,16 @@ async function generateRamp(id){
     alert(
       `${result.generated} ramp actions added.`
     );
+
+    const generator =
+      document.getElementById(
+        `ramp-generator-${id}`
+      );
+
+    if (generator) {
+      generator.hidden =
+        true;
+    }
 
     await refresh();
 
