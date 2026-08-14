@@ -1,0 +1,85 @@
+# SensorSphere Simulator — SIM-002
+
+Autonomous MQTT sensor simulator for SensorSphere testing.
+
+## Features
+
+- Multiple simulated sensors
+- Arbitrary metrics per sensor
+- Enable/disable each metric
+- Editable values while running
+- Per-sensor publication interval
+- Start/stop/publish-now per sensor
+- Start/stop/publish-all globally
+- Persistent JSON configuration
+- Persistent MQTT connection
+- Publication log
+- Docker deployment
+
+## Start
+
+```bash
+docker compose -f docker-compose.simulator.yml up -d --build
+```
+
+Open:
+
+```text
+http://<VPS-IP>:8090
+```
+
+## MQTT configuration
+
+Defaults:
+
+- broker: `100.64.0.9`
+- port: `1883`
+- topic prefix: `sensors/ble_gateway/sensor`
+
+Override before starting:
+
+```bash
+export SIMULATOR_MQTT_HOST=100.64.0.9
+export SIMULATOR_MQTT_PORT=1883
+docker compose -f docker-compose.simulator.yml up -d --build
+```
+
+Topics are generated as:
+
+```text
+sensors/ble_gateway/sensor/<metric>_<sensor_uid>/state
+```
+
+Example:
+
+```text
+sensors/ble_gateway/sensor/temperature_11_22_33/state
+```
+
+## Notes
+
+Sensors intentionally start in STOPPED state after application restart.
+Configuration and logs are stored in `data/simulator.json`.
+
+
+## SIM-002 generation modes
+
+Each metric supports four modes:
+
+- `Manual`: publish the current value unchanged.
+- `Random`: generate a value between Min and Max on every publication.
+- `Ramp`: change by Step between Start and End, then reverse direction.
+- `Timeline`: use time/value points relative to the moment the sensor starts.
+
+Example timeline:
+
+```text
+0 s     20
+60 s    24
+120 s   28
+300 s   35
+600 s   20
+```
+
+Timeline mode is useful for automated validation of SensorSphere alert thresholds,
+`durationSeconds`, `cooldownSeconds`, `NO_DATA` and recovery behavior.

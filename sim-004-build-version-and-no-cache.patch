@@ -1,0 +1,212 @@
+diff --git a/README.md b/README.md
+index 4162849..5e06976 100644
+--- a/README.md
++++ b/README.md
+@@ -83,3 +83,18 @@ Example timeline:
+ 
+ Timeline mode is useful for automated validation of SensorSphere alert thresholds,
+ `durationSeconds`, `cooldownSeconds`, `NO_DATA` and recovery behavior.
++
++
++## Build identification
++
++From SIM-004 onward, every Simulator patch increments both:
++
++```text
++SIMULATOR_VERSION=SIM-004
++SIMULATOR_BUILD=004
++```
++
++The value is visible in the application header and in container startup logs.
++
++The HTTP server also sends `no-store` cache headers for the development UI,
++to prevent stale JavaScript/CSS after rebuilding the container.
+diff --git a/docker-compose.simulator.yml b/docker-compose.simulator.yml
+index 7a93815..d5036f5 100644
+--- a/docker-compose.simulator.yml
++++ b/docker-compose.simulator.yml
+@@ -14,6 +14,8 @@ services:
+       MQTT_USERNAME: "${SIMULATOR_MQTT_USERNAME:-}"
+       MQTT_PASSWORD: "${SIMULATOR_MQTT_PASSWORD:-}"
+       MQTT_TOPIC_PREFIX: "${SIMULATOR_MQTT_TOPIC_PREFIX:-sensors/ble_gateway/sensor}"
++      SIMULATOR_VERSION: "${SIMULATOR_VERSION:-SIM-004}"
++      SIMULATOR_BUILD: "${SIMULATOR_BUILD:-004}"
+       DATA_FILE: "/app/data/simulator.json"
+     volumes:
+       - ./data:/app/data
+diff --git a/public/app.js b/public/app.js
+index 28cb9d6..937f89d 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -59,6 +59,19 @@ async function refresh() {
+ }
+ 
+ function renderStatus() {
++  const buildVersion =
++    document.getElementById(
++      "buildVersion"
++    );
++
++  if (
++    buildVersion &&
++    current.application
++  ) {
++    buildVersion.textContent =
++      `${current.application.version} · build ${current.application.build}`;
++  }
++
+   const mqtt =
+     document.getElementById(
+       "mqtt"
+diff --git a/public/index.html b/public/index.html
+index 8eceb1e..ddadf8d 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -8,8 +8,23 @@
+ </head>
+ <body>
+ <header>
+-  <div><h1>SensorSphere Simulator</h1><p>MQTT test bench</p></div>
+-  <div id="mqtt" class="status">MQTT …</div>
++  <div class="brand">
++    <div>
++      <h1>SensorSphere Simulator</h1>
++      <p>MQTT test bench</p>
++    </div>
++
++    <span
++      id="buildVersion"
++      class="build-version"
++    >
++      SIM-004 · build 004
++    </span>
++  </div>
++
++  <div id="mqtt" class="status">
++    MQTT …
++  </div>
+ </header>
+ <main>
+   <section class="toolbar">
+diff --git a/public/styles.css b/public/styles.css
+index b14e66e..901d4eb 100644
+--- a/public/styles.css
++++ b/public/styles.css
+@@ -121,3 +121,31 @@ select{border:1px solid #d1d5db;border-radius:6px;padding:7px 8px;background:whi
+     margin-left:0;
+   }
+ }
++
++/* SIM-004 build/version indicator */
++.brand{
++  display:flex;
++  align-items:center;
++  gap:14px;
++}
++.build-version{
++  display:inline-flex;
++  align-items:center;
++  padding:4px 8px;
++  border-radius:999px;
++  background:#eef2ff;
++  color:#4338ca;
++  border:1px solid #c7d2fe;
++  font-size:11px;
++  font-weight:800;
++  white-space:nowrap;
++}
++@media(max-width:650px){
++  .brand{
++    gap:8px;
++  }
++  .build-version{
++    font-size:10px;
++    padding:3px 6px;
++  }
++}
+diff --git a/src/server.js b/src/server.js
+index 4ff99b7..f6a997d 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -11,6 +11,14 @@ const MQTT_URL = process.env.MQTT_URL ??
+ const TOPIC_PREFIX = process.env.MQTT_TOPIC_PREFIX ?? "sensors/ble_gateway/sensor";
+ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
+ 
++const APP_VERSION =
++  process.env.SIMULATOR_VERSION
++  ?? "SIM-004";
++
++const BUILD_NUMBER =
++  process.env.SIMULATOR_BUILD
++  ?? "004";
++
+ const defaultState = {
+   sensors: [{
+     id: crypto.randomUUID(),
+@@ -65,10 +73,16 @@ async function saveState() {
+ 
+ function publicState() {
+   return {
++    application: {
++      version: APP_VERSION,
++      build: BUILD_NUMBER
++    },
++
+     mqtt: {
+       url: MQTT_URL.replace(/\/\/.*@/, "//***@"),
+       connected: client.connected
+     },
++
+     sensors: state.sensors,
+     logs: state.logs.slice(0, LOG_LIMIT)
+   };
+@@ -262,6 +276,35 @@ client.on("error", error => addLog({ status: "ERROR", message: `MQTT: ${error.me
+ await loadState();
+ 
+ const app = express();
++
++app.use(
++  (
++    _req,
++    res,
++    next
++  ) => {
++
++    // The simulator UI changes frequently during development.
++    // Prevent stale app.js/styles.css/index.html after rebuilds.
++    res.setHeader(
++      "Cache-Control",
++      "no-store, no-cache, must-revalidate, proxy-revalidate"
++    );
++
++    res.setHeader(
++      "Pragma",
++      "no-cache"
++    );
++
++    res.setHeader(
++      "Expires",
++      "0"
++    );
++
++    next();
++  }
++);
++
+ app.use(express.json());
+ app.use(express.static("public"));
+ 
+@@ -422,6 +465,11 @@ app.delete("/api/logs", async (_req, res) => {
+ });
+ 
+ app.listen(PORT, "0.0.0.0", () => {
+-  console.log(`SensorSphere Simulator listening on :${PORT}`);
+-  console.log(`MQTT target: ${MQTT_URL}`);
++  console.log(
++    `SensorSphere Simulator ${APP_VERSION} build ${BUILD_NUMBER} listening on :${PORT}`
++  );
++
++  console.log(
++    `MQTT target: ${MQTT_URL}`
++  );
+ });

@@ -1,0 +1,19 @@
+services:
+  sensor-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sensorsphere-simulator
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: "8090"
+      MQTT_HOST: "${SIMULATOR_MQTT_HOST:-100.64.0.9}"
+      MQTT_PORT: "${SIMULATOR_MQTT_PORT:-1883}"
+      MQTT_USERNAME: "${SIMULATOR_MQTT_USERNAME:-}"
+      MQTT_PASSWORD: "${SIMULATOR_MQTT_PASSWORD:-}"
+      MQTT_TOPIC_PREFIX: "${SIMULATOR_MQTT_TOPIC_PREFIX:-sensors/ble_gateway/sensor}"
+      DATA_FILE: "/app/data/simulator.json"
+    volumes:
+      - ./data:/app/data
