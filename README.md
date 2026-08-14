@@ -248,3 +248,7 @@ scenario name controlling that metric.
 
 When the scenario ends or is stopped, the metric automatically returns to its
 normal editable appearance.
+
+## SIM-014 branding fix
+
+Adds the missing SVG branding asset and fixes the favicon HTML newline.
