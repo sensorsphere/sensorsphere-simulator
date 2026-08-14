@@ -11,7 +11,7 @@ async function api(url, options={}) {
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-function isEditingSensorForm() {
+function isEditingForm() {
   const active =
     document.activeElement;
 
@@ -22,7 +22,10 @@ function isEditingSensorForm() {
       active.tagName === "SELECT" ||
       active.tagName === "TEXTAREA"
     ) &&
-    active.closest(".sensor")
+    (
+      active.closest(".sensor") ||
+      active.closest(".scenario-card")
+    )
   );
 }
 
@@ -37,11 +40,11 @@ async function refresh() {
 
     // Do not rebuild sensor forms while the user is typing.
     // Replacing the DOM would move focus/cursor and interrupt input.
-    if (!isEditingSensorForm()) {
+    if (!isEditingForm()) {
       renderSensors();
+      renderScenarios();
     }
 
-    renderScenarios();
     renderLogFilters();
     renderLogs();
 
@@ -215,13 +218,13 @@ function scenarioElapsed(
 }
 
 function actionSensorOptions(
-  selectedId
+  selectedUid
 ) {
   return current.sensors
     .map(
       sensor =>
-        `<option value="${sensor.id}" ${
-          sensor.id === selectedId
+        `<option value="${esc(sensor.uid)}" ${
+          sensor.uid === selectedUid
             ? "selected"
             : ""
         }>${esc(sensor.name)} · ${esc(sensor.uid)}</option>`
@@ -230,21 +233,21 @@ function actionSensorOptions(
 }
 
 function actionMetricOptions(
-  sensorId,
-  selectedId
+  sensorUid,
+  selectedKey
 ) {
   const sensor =
     current.sensors.find(
       currentSensor =>
-        currentSensor.id ===
-        sensorId
+        currentSensor.uid ===
+        sensorUid
     );
 
   return (sensor?.metrics || [])
     .map(
       metric =>
-        `<option value="${metric.id}" ${
-          metric.id === selectedId
+        `<option value="${esc(metric.key)}" ${
+          metric.key === selectedKey
             ? "selected"
             : ""
         }>${esc(metric.key)}</option>`
@@ -396,17 +399,20 @@ function renderScenarios() {
                             </select>
 
                             <select
-                              onchange="patchScenarioAction('${scenario.id}','${action.id}',{sensorId:this.value,metricId:null})"
+                              onchange="patchScenarioAction('${scenario.id}','${action.id}',{sensorUid:this.value,metricKey:null})"
                             >
-                              ${actionSensorOptions(action.sensorId)}
+                              ${actionSensorOptions(action.sensorUid || current.sensors.find(s => s.id === action.sensorId)?.uid)}
                             </select>
 
                             ${
                               needsMetric
                                 ? `<select
-                                    onchange="patchScenarioAction('${scenario.id}','${action.id}',{metricId:this.value})"
+                                    onchange="patchScenarioAction('${scenario.id}','${action.id}',{metricKey:this.value})"
                                   >
-                                    ${actionMetricOptions(action.sensorId, action.metricId)}
+                                    ${actionMetricOptions(
+                                      action.sensorUid || current.sensors.find(s => s.id === action.sensorId)?.uid,
+                                      action.metricKey || current.sensors.find(s => s.id === action.sensorId)?.metrics.find(m => m.id === action.metricId)?.key
+                                    )}
                                   </select>`
                                 : `<span class="action-placeholder">—</span>`
                             }
@@ -728,8 +734,8 @@ async function addScenarioAction(scenarioId){
       body:JSON.stringify({
         offsetSeconds:0,
         type:"SET_VALUE",
-        sensorId:firstSensor.id,
-        metricId:firstMetric?.id || null,
+        sensorUid:firstSensor.uid,
+        metricKey:firstMetric?.key || null,
         value:firstMetric?.value ?? ""
       })
     }

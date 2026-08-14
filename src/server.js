@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-005";
+  ?? "SIM-006";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "005";
+  ?? "006";
 
 const defaultState = {
   sensors: [{
@@ -54,6 +54,46 @@ async function loadState() {
       scenario.startedAt = null;
       scenario.pausedAt = null;
       scenario.elapsedBeforePause = 0;
+
+      for (const action of scenario.actions ?? []) {
+        if (!action.sensorUid && action.sensorId) {
+          const sensor =
+            state.sensors.find(
+              current =>
+                current.id ===
+                action.sensorId
+            );
+
+          if (sensor) {
+            action.sensorUid =
+              sensor.uid;
+          }
+        }
+
+        if (
+          !action.metricKey &&
+          action.metricId
+        ) {
+          const sensor =
+            state.sensors.find(
+              current =>
+                current.id ===
+                action.sensorId
+            );
+
+          const metric =
+            sensor?.metrics.find(
+              current =>
+                current.id ===
+                action.metricId
+            );
+
+          if (metric) {
+            action.metricKey =
+              metric.key;
+          }
+        }
+      }
     }
     for (const sensor of state.sensors) {
       sensor.enabled = false;
@@ -320,8 +360,16 @@ async function applyScenarioAction(
   const sensor =
     state.sensors.find(
       current =>
-        current.id ===
-        action.sensorId
+        (
+          action.sensorUid &&
+          current.uid ===
+            action.sensorUid
+        ) ||
+        (
+          action.sensorId &&
+          current.id ===
+            action.sensorId
+        )
     );
 
   if (!sensor) {
@@ -338,8 +386,16 @@ async function applyScenarioAction(
       const metric =
         sensor.metrics.find(
           current =>
-            current.id ===
-            action.metricId
+            (
+              action.metricKey &&
+              current.key ===
+                action.metricKey
+            ) ||
+            (
+              action.metricId &&
+              current.id ===
+                action.metricId
+            )
         );
 
       if (!metric) {
@@ -378,8 +434,16 @@ async function applyScenarioAction(
       const metric =
         sensor.metrics.find(
           current =>
-            current.id ===
-            action.metricId
+            (
+              action.metricKey &&
+              current.key ===
+                action.metricKey
+            ) ||
+            (
+              action.metricId &&
+              current.id ===
+                action.metricId
+            )
         );
 
       if (metric) {
@@ -402,8 +466,16 @@ async function applyScenarioAction(
       const metric =
         sensor.metrics.find(
           current =>
-            current.id ===
-            action.metricId
+            (
+              action.metricKey &&
+              current.key ===
+                action.metricKey
+            ) ||
+            (
+              action.metricId &&
+              current.id ===
+                action.metricId
+            )
         );
 
       if (metric) {
@@ -1102,17 +1174,32 @@ app.post("/api/scenarios/:id/actions", async (req, res) => {
         req.body.type
         || "SET_VALUE"
       ),
-    sensorId:
+    sensorUid:
       String(
-        req.body.sensorId
+        req.body.sensorUid
         || ""
       ),
+    metricKey:
+      req.body.metricKey
+        ? String(
+            req.body.metricKey
+          )
+        : null,
+
+    // Backward compatibility with SIM-005 scenarios.
+    sensorId:
+      req.body.sensorId
+        ? String(
+            req.body.sensorId
+          )
+        : null,
     metricId:
       req.body.metricId
         ? String(
             req.body.metricId
           )
         : null,
+
     value:
       req.body.value !==
         undefined
@@ -1174,6 +1261,34 @@ app.patch("/api/scenarios/:scenarioId/actions/:actionId", async (req, res) => {
       String(
         req.body.type
       );
+  }
+
+  if (
+    req.body.sensorUid !==
+    undefined
+  ) {
+    action.sensorUid =
+      String(
+        req.body.sensorUid
+      );
+
+    action.sensorId =
+      null;
+  }
+
+  if (
+    req.body.metricKey !==
+    undefined
+  ) {
+    action.metricKey =
+      req.body.metricKey
+        ? String(
+            req.body.metricKey
+          )
+        : null;
+
+    action.metricId =
+      null;
   }
 
   if (

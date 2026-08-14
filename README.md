@@ -123,3 +123,23 @@ Scenario states:
 - `COMPLETED`
 
 Scenarios and actions are persisted in `data/simulator.json`.
+
+
+## SIM-006 scenario portability
+
+Scenario actions now persist readable identifiers:
+
+```json
+{
+  "sensorUid": "11_22_33",
+  "metricKey": "temperature"
+}
+```
+
+instead of relying on internal UUIDs.
+
+SIM-005 scenario actions using `sensorId` / `metricId` remain supported and
+are migrated to UID/key references when the state file is loaded.
+
+SIM-006 also prevents the automatic UI refresh from rebuilding scenario forms
+while an input/select/textarea inside a scenario has focus.
