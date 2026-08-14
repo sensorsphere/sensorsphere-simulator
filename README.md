@@ -252,3 +252,14 @@ normal editable appearance.
 ## SIM-014 branding fix
 
 Adds the missing SVG branding asset and fixes the favicon HTML newline.
+
+## SIM-015 favicon compatibility
+
+Adds cache-busted favicon references and PNG fallbacks:
+
+- SVG favicon: `/sensorsphere-simulator.svg?v=15`
+- PNG favicon: `/favicon-32.png?v=15`
+- shortcut icon fallback
+- Apple touch icon: `/apple-touch-icon.png?v=15`
+
+This avoids stale browser favicon caches and improves compatibility.
