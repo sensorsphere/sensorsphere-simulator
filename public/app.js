@@ -11,29 +11,97 @@ async function api(url, options={}) {
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+function isEditingSensorForm() {
+  const active =
+    document.activeElement;
+
+  return Boolean(
+    active &&
+    (
+      active.tagName === "INPUT" ||
+      active.tagName === "SELECT" ||
+      active.tagName === "TEXTAREA"
+    ) &&
+    active.closest(".sensor")
+  );
+}
+
 async function refresh() {
   try {
-    current = await api("/api/state");
-    render();
+    current =
+      await api(
+        "/api/state"
+      );
+
+    renderStatus();
+
+    // Do not rebuild sensor forms while the user is typing.
+    // Replacing the DOM would move focus/cursor and interrupt input.
+    if (!isEditingSensorForm()) {
+      renderSensors();
+    }
+
+    renderLogFilters();
+    renderLogs();
+
   } catch (e) {
-    document.getElementById("mqtt").textContent = "API disconnected";
+    const mqtt =
+      document.getElementById(
+        "mqtt"
+      );
+
+    mqtt.className =
+      "status disconnected";
+
+    mqtt.textContent =
+      "API disconnected";
   }
 }
 
-function render() {
-  const mqtt = document.getElementById("mqtt");
-  mqtt.className = `status ${current.mqtt.connected ? "connected":"disconnected"}`;
-  mqtt.textContent = current.mqtt.connected ? "● MQTT connected" : "● MQTT disconnected";
+function renderStatus() {
+  const mqtt =
+    document.getElementById(
+      "mqtt"
+    );
 
+  mqtt.className =
+    `status ${
+      current.mqtt.connected
+        ? "connected"
+        : "disconnected"
+    }`;
+
+  mqtt.textContent =
+    current.mqtt.connected
+      ? "● MQTT connected"
+      : "● MQTT disconnected";
+}
+
+function renderSensors() {
   document.getElementById("sensors").innerHTML = current.sensors.map(sensor => `
     <section class="sensor">
       <div class="sensor-head">
         <div class="grow">
           <h2>${esc(sensor.name)}</h2>
-          <small>UID: ${esc(sensor.uid)} · <span class="${sensor.enabled?"running":"stopped"}">${sensor.enabled?"RUNNING":"STOPPED"}</span></small>
+          <small>
+            UID: ${esc(sensor.uid)} ·
+            <span class="sensor-status ${sensor.enabled?"running":"stopped"}">
+              ${sensor.enabled?"RUNNING":"STOPPED"}
+            </span>
+          </small>
         </div>
-        <button onclick="sensorAction('${sensor.id}','${sensor.enabled?"stop":"start"}')">${sensor.enabled?"■ Stop":"▶ Start"}</button>
-        <button onclick="sensorAction('${sensor.id}','publish')">Publish now</button>
+        <button
+          class="${sensor.enabled?"btn-stop":"btn-start"}"
+          onclick="sensorAction('${sensor.id}','${sensor.enabled?"stop":"start"}')"
+        >
+          ${sensor.enabled?"■ Stop":"▶ Start"}
+        </button>
+        <button
+          class="btn-publish"
+          onclick="sensorAction('${sensor.id}','publish')"
+        >
+          Publish now
+        </button>
         <button class="danger" onclick="deleteSensor('${sensor.id}')">Delete</button>
       </div>
       <div class="config">
@@ -93,11 +161,155 @@ function render() {
       <button class="addmetric" onclick="addMetric('${sensor.id}')">+ Add metric</button>
     </section>`).join("");
 
-  document.getElementById("logRows").innerHTML = current.logs.map(log => `
-    <tr><td>${new Date(log.time).toLocaleTimeString()}</td><td>${esc(log.sensor||"—")}</td>
-    <td>${esc(log.metric||"—")}</td><td>${esc(log.value||"—")}</td>
-    <td class="${log.status==="OK"?"ok":log.status==="ERROR"?"error":""}">${esc(log.status)}</td>
-    <td class="topic">${esc(log.topic||log.message||"")}</td></tr>`).join("");
+}
+
+function setSelectOptions(
+  id,
+  values,
+  allLabel
+) {
+  const select =
+    document.getElementById(id);
+
+  if (!select) {
+    return;
+  }
+
+  const previous =
+    select.value;
+
+  select.innerHTML =
+    [
+      `<option value="">${esc(allLabel)}</option>`,
+      ...values.map(
+        value =>
+          `<option value="${esc(value)}">${esc(value)}</option>`
+      )
+    ].join("");
+
+  if (
+    values.includes(previous)
+  ) {
+    select.value =
+      previous;
+  }
+}
+
+function renderLogFilters() {
+  const sensors =
+    [...new Set(
+      current.logs
+        .map(log => log.sensor)
+        .filter(Boolean)
+    )]
+    .sort();
+
+  const metrics =
+    [...new Set(
+      current.logs
+        .map(log => log.metric)
+        .filter(Boolean)
+    )]
+    .sort();
+
+  setSelectOptions(
+    "logSensor",
+    sensors,
+    "All sensors"
+  );
+
+  setSelectOptions(
+    "logMetric",
+    metrics,
+    "All metrics"
+  );
+}
+
+function renderLogs() {
+  const periodMinutes =
+    Number(
+      document.getElementById(
+        "logPeriod"
+      )?.value ?? 5
+    );
+
+  const sensorFilter =
+    document.getElementById(
+      "logSensor"
+    )?.value ?? "";
+
+  const metricFilter =
+    document.getElementById(
+      "logMetric"
+    )?.value ?? "";
+
+  const statusFilter =
+    document.getElementById(
+      "logStatus"
+    )?.value ?? "";
+
+  const cutoff =
+    Date.now() -
+    periodMinutes *
+    60 *
+    1000;
+
+  const logs =
+    current.logs.filter(
+      log =>
+        new Date(
+          log.time
+        ).getTime() >= cutoff &&
+        (
+          !sensorFilter ||
+          log.sensor ===
+            sensorFilter
+        ) &&
+        (
+          !metricFilter ||
+          log.metric ===
+            metricFilter
+        ) &&
+        (
+          !statusFilter ||
+          log.status ===
+            statusFilter
+        )
+    );
+
+  const count =
+    document.getElementById(
+      "logCount"
+    );
+
+  if (count) {
+    count.textContent =
+      `${logs.length} event${
+        logs.length === 1
+          ? ""
+          : "s"
+      }`;
+  }
+
+  document.getElementById(
+    "logRows"
+  ).innerHTML =
+    logs.map(
+      log => `
+        <tr>
+          <td>${new Date(log.time).toLocaleTimeString()}</td>
+          <td>${esc(log.sensor||"—")}</td>
+          <td>${esc(log.metric||"—")}</td>
+          <td>${esc(log.value||"—")}</td>
+          <td>
+            <span class="log-status status-${String(log.status).toLowerCase()}">
+              ${esc(log.status)}
+            </span>
+          </td>
+          <td class="topic">${esc(log.topic||log.message||"")}</td>
+        </tr>`
+    )
+    .join("");
 }
 
 async function action(url){ await api(url,{method:"POST"}); await refresh(); }

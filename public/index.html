@@ -20,9 +20,67 @@
   </section>
   <div id="sensors"></div>
   <section class="logs">
-    <div class="section-title"><div><h2>Publication log</h2><span>Latest MQTT activity</span></div>
-      <button onclick="clearLogs()">Clear</button></div>
-    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Sensor</th><th>Metric</th><th>Value</th><th>Status</th><th>Topic / message</th></tr></thead><tbody id="logRows"></tbody></table></div>
+    <div class="section-title">
+      <div>
+        <h2>Publication log</h2>
+        <span>Latest MQTT activity</span>
+      </div>
+      <button onclick="clearLogs()">Clear</button>
+    </div>
+
+    <div class="log-filters">
+      <label>
+        Period
+        <select id="logPeriod" onchange="renderLogs()">
+          <option value="1">Last 1 minute</option>
+          <option value="2">Last 2 minutes</option>
+          <option value="5" selected>Last 5 minutes</option>
+          <option value="10">Last 10 minutes</option>
+        </select>
+      </label>
+
+      <label>
+        Sensor
+        <select id="logSensor" onchange="renderLogs()">
+          <option value="">All sensors</option>
+        </select>
+      </label>
+
+      <label>
+        Metric
+        <select id="logMetric" onchange="renderLogs()">
+          <option value="">All metrics</option>
+        </select>
+      </label>
+
+      <label>
+        Status
+        <select id="logStatus" onchange="renderLogs()">
+          <option value="">All statuses</option>
+          <option value="OK">OK</option>
+          <option value="INFO">INFO</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+      </label>
+
+      <span id="logCount" class="log-count"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Sensor</th>
+            <th>Metric</th>
+            <th>Value</th>
+            <th>Status</th>
+            <th>Topic / message</th>
+          </tr>
+        </thead>
+        <tbody id="logRows"></tbody>
+      </table>
+    </div>
   </section>
 </main>
 <script src="/app.js"></script>
