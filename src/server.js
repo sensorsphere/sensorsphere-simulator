@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-004";
+  ?? "SIM-005";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "004";
+  ?? "005";
 
 const defaultState = {
   sensors: [{
@@ -34,17 +34,27 @@ const defaultState = {
       { id: crypto.randomUUID(), key: "rssi", value: "-81", unit: "dBm", enabled: true }
     ]
   }],
+  scenarios: [],
   logs: []
 };
 
 let state;
 const timers = new Map();
+const scenarioTimers = new Map();
 
 async function loadState() {
   try {
     state = JSON.parse(await fs.readFile(DATA_FILE, "utf8"));
     state.logs ??= [];
     state.sensors ??= [];
+    state.scenarios ??= [];
+
+    for (const scenario of state.scenarios) {
+      scenario.status = "STOPPED";
+      scenario.startedAt = null;
+      scenario.pausedAt = null;
+      scenario.elapsedBeforePause = 0;
+    }
     for (const sensor of state.sensors) {
       sensor.enabled = false;
 
@@ -84,6 +94,7 @@ function publicState() {
     },
 
     sensors: state.sensors,
+    scenarios: state.scenarios,
     logs: state.logs.slice(0, LOG_LIMIT)
   };
 }
@@ -261,6 +272,425 @@ function startSensor(sensor) {
 
 function restartIfRunning(sensor, wasRunning) {
   if (wasRunning) startSensor(sensor);
+}
+
+function scenarioElapsedSeconds(
+  scenario
+) {
+  if (
+    scenario.status ===
+    "PAUSED"
+  ) {
+    return Math.floor(
+      (
+        scenario.elapsedBeforePause
+        ?? 0
+      ) /
+      1000
+    );
+  }
+
+  if (
+    scenario.status !==
+      "RUNNING" ||
+    !scenario.startedAt
+  ) {
+    return 0;
+  }
+
+  return Math.floor(
+    (
+      (
+        Date.now() -
+        scenario.startedAt
+      ) +
+      (
+        scenario.elapsedBeforePause
+        ?? 0
+      )
+    ) /
+    1000
+  );
+}
+
+async function applyScenarioAction(
+  scenario,
+  action
+) {
+  const sensor =
+    state.sensors.find(
+      current =>
+        current.id ===
+        action.sensorId
+    );
+
+  if (!sensor) {
+    addLog({
+      status: "ERROR",
+      message:
+        `Scenario "${scenario.name}": sensor not found`
+    });
+    return;
+  }
+
+  switch (action.type) {
+    case "SET_VALUE": {
+      const metric =
+        sensor.metrics.find(
+          current =>
+            current.id ===
+            action.metricId
+        );
+
+      if (!metric) {
+        addLog({
+          status: "ERROR",
+          sensor: sensor.name,
+          uid: sensor.uid,
+          message:
+            `Scenario "${scenario.name}": metric not found`
+        });
+        return;
+      }
+
+      metric.value =
+        String(
+          action.value ?? ""
+        );
+
+      metric.mode =
+        "manual";
+
+      addLog({
+        status: "INFO",
+        sensor: sensor.name,
+        uid: sensor.uid,
+        metric: metric.key,
+        value: metric.value,
+        message:
+          `Scenario "${scenario.name}" set value`
+      });
+
+      break;
+    }
+
+    case "ENABLE_METRIC": {
+      const metric =
+        sensor.metrics.find(
+          current =>
+            current.id ===
+            action.metricId
+        );
+
+      if (metric) {
+        metric.enabled = true;
+
+        addLog({
+          status: "INFO",
+          sensor: sensor.name,
+          uid: sensor.uid,
+          metric: metric.key,
+          message:
+            `Scenario "${scenario.name}" enabled metric`
+        });
+      }
+
+      break;
+    }
+
+    case "DISABLE_METRIC": {
+      const metric =
+        sensor.metrics.find(
+          current =>
+            current.id ===
+            action.metricId
+        );
+
+      if (metric) {
+        metric.enabled = false;
+
+        addLog({
+          status: "INFO",
+          sensor: sensor.name,
+          uid: sensor.uid,
+          metric: metric.key,
+          message:
+            `Scenario "${scenario.name}" disabled metric`
+        });
+      }
+
+      break;
+    }
+
+    case "START_SENSOR":
+      startSensor(sensor);
+
+      addLog({
+        status: "INFO",
+        sensor: sensor.name,
+        uid: sensor.uid,
+        message:
+          `Scenario "${scenario.name}" started sensor`
+      });
+
+      break;
+
+    case "STOP_SENSOR":
+      stopSensor(sensor);
+
+      addLog({
+        status: "INFO",
+        sensor: sensor.name,
+        uid: sensor.uid,
+        message:
+          `Scenario "${scenario.name}" stopped sensor`
+      });
+
+      break;
+
+    case "PUBLISH_SENSOR":
+      await publishSensor(
+        sensor
+      );
+
+      break;
+  }
+}
+
+async function scenarioTick(
+  scenario
+) {
+  if (
+    scenario.status !==
+    "RUNNING"
+  ) {
+    return;
+  }
+
+  const elapsed =
+    scenarioElapsedSeconds(
+      scenario
+    );
+
+  const actions =
+    [...(scenario.actions ?? [])]
+      .sort(
+        (left, right) =>
+          left.offsetSeconds -
+          right.offsetSeconds
+      );
+
+  for (const action of actions) {
+    if (
+      action.executed ||
+      action.offsetSeconds >
+        elapsed
+    ) {
+      continue;
+    }
+
+    action.executed =
+      true;
+
+    await applyScenarioAction(
+      scenario,
+      action
+    );
+  }
+
+  const pending =
+    actions.some(
+      action =>
+        !action.executed
+    );
+
+  if (!pending) {
+    scenario.status =
+      "COMPLETED";
+
+    const timer =
+      scenarioTimers.get(
+        scenario.id
+      );
+
+    if (timer) {
+      clearInterval(timer);
+    }
+
+    scenarioTimers.delete(
+      scenario.id
+    );
+
+    addLog({
+      status: "INFO",
+      message:
+        `Scenario "${scenario.name}" completed`
+    });
+  }
+
+  await saveState();
+}
+
+function resetScenarioActions(
+  scenario
+) {
+  for (
+    const action
+    of scenario.actions ?? []
+  ) {
+    action.executed = false;
+  }
+}
+
+function startScenario(
+  scenario
+) {
+  const previous =
+    scenarioTimers.get(
+      scenario.id
+    );
+
+  if (previous) {
+    clearInterval(previous);
+  }
+
+  resetScenarioActions(
+    scenario
+  );
+
+  scenario.startedAt =
+    Date.now();
+
+  scenario.pausedAt =
+    null;
+
+  scenario.elapsedBeforePause =
+    0;
+
+  scenario.status =
+    "RUNNING";
+
+  scenarioTick(
+    scenario
+  );
+
+  scenarioTimers.set(
+    scenario.id,
+    setInterval(
+      () =>
+        scenarioTick(
+          scenario
+        ),
+      1000
+    )
+  );
+}
+
+function pauseScenario(
+  scenario
+) {
+  if (
+    scenario.status !==
+    "RUNNING"
+  ) {
+    return;
+  }
+
+  scenario.elapsedBeforePause =
+    (
+      scenario.elapsedBeforePause
+      ?? 0
+    ) +
+    (
+      Date.now() -
+      scenario.startedAt
+    );
+
+  scenario.startedAt =
+    null;
+
+  scenario.pausedAt =
+    Date.now();
+
+  scenario.status =
+    "PAUSED";
+
+  const timer =
+    scenarioTimers.get(
+      scenario.id
+    );
+
+  if (timer) {
+    clearInterval(timer);
+  }
+
+  scenarioTimers.delete(
+    scenario.id
+  );
+}
+
+function resumeScenario(
+  scenario
+) {
+  if (
+    scenario.status !==
+    "PAUSED"
+  ) {
+    return;
+  }
+
+  scenario.startedAt =
+    Date.now();
+
+  scenario.pausedAt =
+    null;
+
+  scenario.status =
+    "RUNNING";
+
+  scenarioTimers.set(
+    scenario.id,
+    setInterval(
+      () =>
+        scenarioTick(
+          scenario
+        ),
+      1000
+    )
+  );
+}
+
+function stopScenario(
+  scenario
+) {
+  const timer =
+    scenarioTimers.get(
+      scenario.id
+    );
+
+  if (timer) {
+    clearInterval(timer);
+  }
+
+  scenarioTimers.delete(
+    scenario.id
+  );
+
+  scenario.status =
+    "STOPPED";
+
+  scenario.startedAt =
+    null;
+
+  scenario.pausedAt =
+    null;
+
+  scenario.elapsedBeforePause =
+    0;
+
+  resetScenarioActions(
+    scenario
+  );
 }
 
 const client = mqtt.connect(MQTT_URL, {
@@ -455,6 +885,363 @@ app.delete("/api/sensors/:sensorId/metrics/:metricId", async (req, res) => {
   if (!sensor) return res.sendStatus(404);
   sensor.metrics = sensor.metrics.filter(m => m.id !== req.params.metricId);
   await saveState();
+  res.sendStatus(204);
+});
+
+app.post("/api/scenarios", async (req, res) => {
+  const scenario = {
+    id: crypto.randomUUID(),
+    name: String(
+      req.body.name
+      || "New scenario"
+    ),
+    description: String(
+      req.body.description
+      || ""
+    ),
+    status: "STOPPED",
+    startedAt: null,
+    pausedAt: null,
+    elapsedBeforePause: 0,
+    actions: []
+  };
+
+  state.scenarios.push(
+    scenario
+  );
+
+  await saveState();
+
+  res.status(201).json(
+    scenario
+  );
+});
+
+app.patch("/api/scenarios/:id", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  if (
+    req.body.name !==
+    undefined
+  ) {
+    scenario.name =
+      String(
+        req.body.name
+      );
+  }
+
+  if (
+    req.body.description !==
+    undefined
+  ) {
+    scenario.description =
+      String(
+        req.body.description
+      );
+  }
+
+  await saveState();
+
+  res.json(
+    scenario
+  );
+});
+
+app.delete("/api/scenarios/:id", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  stopScenario(
+    scenario
+  );
+
+  state.scenarios =
+    state.scenarios.filter(
+      current =>
+        current.id !==
+        scenario.id
+    );
+
+  await saveState();
+
+  res.sendStatus(204);
+});
+
+app.post("/api/scenarios/:id/start", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  startScenario(
+    scenario
+  );
+
+  await saveState();
+
+  res.json(
+    scenario
+  );
+});
+
+app.post("/api/scenarios/:id/pause", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  pauseScenario(
+    scenario
+  );
+
+  await saveState();
+
+  res.json(
+    scenario
+  );
+});
+
+app.post("/api/scenarios/:id/resume", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  resumeScenario(
+    scenario
+  );
+
+  await saveState();
+
+  res.json(
+    scenario
+  );
+});
+
+app.post("/api/scenarios/:id/stop", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  stopScenario(
+    scenario
+  );
+
+  await saveState();
+
+  res.json(
+    scenario
+  );
+});
+
+app.post("/api/scenarios/:id/actions", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  const action = {
+    id: crypto.randomUUID(),
+    offsetSeconds:
+      Math.max(
+        0,
+        Number(
+          req.body.offsetSeconds
+        ) || 0
+      ),
+    type:
+      String(
+        req.body.type
+        || "SET_VALUE"
+      ),
+    sensorId:
+      String(
+        req.body.sensorId
+        || ""
+      ),
+    metricId:
+      req.body.metricId
+        ? String(
+            req.body.metricId
+          )
+        : null,
+    value:
+      req.body.value !==
+        undefined
+        ? String(
+            req.body.value
+          )
+        : null,
+    executed: false
+  };
+
+  scenario.actions.push(
+    action
+  );
+
+  await saveState();
+
+  res.status(201).json(
+    action
+  );
+});
+
+app.patch("/api/scenarios/:scenarioId/actions/:actionId", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.scenarioId
+    );
+
+  const action =
+    scenario?.actions.find(
+      current =>
+        current.id ===
+        req.params.actionId
+    );
+
+  if (!action) {
+    return res.sendStatus(404);
+  }
+
+  if (
+    req.body.offsetSeconds !==
+    undefined
+  ) {
+    action.offsetSeconds =
+      Math.max(
+        0,
+        Number(
+          req.body.offsetSeconds
+        ) || 0
+      );
+  }
+
+  if (
+    req.body.type !==
+    undefined
+  ) {
+    action.type =
+      String(
+        req.body.type
+      );
+  }
+
+  if (
+    req.body.sensorId !==
+    undefined
+  ) {
+    action.sensorId =
+      String(
+        req.body.sensorId
+      );
+  }
+
+  if (
+    req.body.metricId !==
+    undefined
+  ) {
+    action.metricId =
+      req.body.metricId
+        ? String(
+            req.body.metricId
+          )
+        : null;
+  }
+
+  if (
+    req.body.value !==
+    undefined
+  ) {
+    action.value =
+      req.body.value ===
+        null
+        ? null
+        : String(
+            req.body.value
+          );
+  }
+
+  action.executed =
+    false;
+
+  await saveState();
+
+  res.json(
+    action
+  );
+});
+
+app.delete("/api/scenarios/:scenarioId/actions/:actionId", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.scenarioId
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  scenario.actions =
+    scenario.actions.filter(
+      current =>
+        current.id !==
+        req.params.actionId
+    );
+
+  await saveState();
+
   res.sendStatus(204);
 });
 

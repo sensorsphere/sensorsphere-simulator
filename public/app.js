@@ -41,6 +41,7 @@ async function refresh() {
       renderSensors();
     }
 
+    renderScenarios();
     renderLogFilters();
     renderLogs();
 
@@ -174,6 +175,280 @@ function renderSensors() {
       <button class="addmetric" onclick="addMetric('${sensor.id}')">+ Add metric</button>
     </section>`).join("");
 
+}
+
+function scenarioElapsed(
+  scenario
+) {
+  if (
+    scenario.status ===
+    "PAUSED"
+  ) {
+    return Math.floor(
+      (
+        scenario.elapsedBeforePause
+        || 0
+      ) /
+      1000
+    );
+  }
+
+  if (
+    scenario.status !==
+      "RUNNING" ||
+    !scenario.startedAt
+  ) {
+    return 0;
+  }
+
+  return Math.floor(
+    (
+      Date.now() -
+      scenario.startedAt +
+      (
+        scenario.elapsedBeforePause
+        || 0
+      )
+    ) /
+    1000
+  );
+}
+
+function actionSensorOptions(
+  selectedId
+) {
+  return current.sensors
+    .map(
+      sensor =>
+        `<option value="${sensor.id}" ${
+          sensor.id === selectedId
+            ? "selected"
+            : ""
+        }>${esc(sensor.name)} · ${esc(sensor.uid)}</option>`
+    )
+    .join("");
+}
+
+function actionMetricOptions(
+  sensorId,
+  selectedId
+) {
+  const sensor =
+    current.sensors.find(
+      currentSensor =>
+        currentSensor.id ===
+        sensorId
+    );
+
+  return (sensor?.metrics || [])
+    .map(
+      metric =>
+        `<option value="${metric.id}" ${
+          metric.id === selectedId
+            ? "selected"
+            : ""
+        }>${esc(metric.key)}</option>`
+    )
+    .join("");
+}
+
+function scenarioActionNeedsMetric(
+  type
+) {
+  return [
+    "SET_VALUE",
+    "ENABLE_METRIC",
+    "DISABLE_METRIC"
+  ].includes(type);
+}
+
+function renderScenarios() {
+  const target =
+    document.getElementById(
+      "scenarios"
+    );
+
+  if (!target) {
+    return;
+  }
+
+  if (
+    !current.scenarios ||
+    current.scenarios.length === 0
+  ) {
+    target.innerHTML =
+      `<div class="empty-state">
+        No scenarios yet. Create one to automate alert and recovery tests.
+      </div>`;
+    return;
+  }
+
+  target.innerHTML =
+    current.scenarios.map(
+      scenario => {
+
+        const elapsed =
+          scenarioElapsed(
+            scenario
+          );
+
+        const statusClass =
+          `scenario-${String(
+            scenario.status
+          ).toLowerCase()}`;
+
+        const actions =
+          [...(scenario.actions || [])]
+            .sort(
+              (left, right) =>
+                left.offsetSeconds -
+                right.offsetSeconds
+            );
+
+        return `
+          <article class="scenario-card">
+
+            <div class="scenario-head">
+              <div class="grow">
+
+                <input
+                  class="scenario-name"
+                  value="${esc(scenario.name)}"
+                  onchange="patchScenario('${scenario.id}',{name:this.value})"
+                >
+
+                <input
+                  class="scenario-description"
+                  value="${esc(scenario.description || "")}"
+                  placeholder="Description"
+                  onchange="patchScenario('${scenario.id}',{description:this.value})"
+                >
+
+              </div>
+
+              <span class="scenario-status ${statusClass}">
+                ${esc(scenario.status)}
+              </span>
+
+              <span class="scenario-elapsed">
+                ${elapsed}s
+              </span>
+
+              ${
+                scenario.status === "RUNNING"
+                  ? `<button class="btn-pause" onclick="scenarioAction('${scenario.id}','pause')">Pause</button>`
+                  : scenario.status === "PAUSED"
+                    ? `<button class="btn-start" onclick="scenarioAction('${scenario.id}','resume')">Resume</button>`
+                    : `<button class="btn-start" onclick="scenarioAction('${scenario.id}','start')">Start</button>`
+              }
+
+              <button
+                class="btn-stop"
+                onclick="scenarioAction('${scenario.id}','stop')"
+              >
+                Stop
+              </button>
+
+              <button
+                class="danger"
+                onclick="deleteScenario('${scenario.id}')"
+              >
+                Delete
+              </button>
+
+            </div>
+
+            <div class="scenario-actions">
+              ${
+                actions.length === 0
+                  ? `<div class="empty-inline">No actions configured.</div>`
+                  : actions.map(
+                      action => {
+
+                        const needsMetric =
+                          scenarioActionNeedsMetric(
+                            action.type
+                          );
+
+                        return `
+                          <div class="scenario-action">
+
+                            <label>
+                              At
+                              <input
+                                type="number"
+                                min="0"
+                                value="${action.offsetSeconds}"
+                                onchange="patchScenarioAction('${scenario.id}','${action.id}',{offsetSeconds:Number(this.value)})"
+                              >
+                              s
+                            </label>
+
+                            <select
+                              onchange="patchScenarioAction('${scenario.id}','${action.id}',{type:this.value})"
+                            >
+                              <option value="SET_VALUE" ${action.type==="SET_VALUE"?"selected":""}>Set value</option>
+                              <option value="ENABLE_METRIC" ${action.type==="ENABLE_METRIC"?"selected":""}>Enable metric</option>
+                              <option value="DISABLE_METRIC" ${action.type==="DISABLE_METRIC"?"selected":""}>Disable metric</option>
+                              <option value="START_SENSOR" ${action.type==="START_SENSOR"?"selected":""}>Start sensor</option>
+                              <option value="STOP_SENSOR" ${action.type==="STOP_SENSOR"?"selected":""}>Stop sensor</option>
+                              <option value="PUBLISH_SENSOR" ${action.type==="PUBLISH_SENSOR"?"selected":""}>Publish sensor</option>
+                            </select>
+
+                            <select
+                              onchange="patchScenarioAction('${scenario.id}','${action.id}',{sensorId:this.value,metricId:null})"
+                            >
+                              ${actionSensorOptions(action.sensorId)}
+                            </select>
+
+                            ${
+                              needsMetric
+                                ? `<select
+                                    onchange="patchScenarioAction('${scenario.id}','${action.id}',{metricId:this.value})"
+                                  >
+                                    ${actionMetricOptions(action.sensorId, action.metricId)}
+                                  </select>`
+                                : `<span class="action-placeholder">—</span>`
+                            }
+
+                            ${
+                              action.type === "SET_VALUE"
+                                ? `<input
+                                    class="action-value"
+                                    value="${esc(action.value ?? "")}"
+                                    placeholder="value"
+                                    onchange="patchScenarioAction('${scenario.id}','${action.id}',{value:this.value})"
+                                  >`
+                                : `<span class="action-placeholder">—</span>`
+                            }
+
+                            <button
+                              class="danger"
+                              onclick="deleteScenarioAction('${scenario.id}','${action.id}')"
+                            >
+                              ×
+                            </button>
+
+                          </div>
+                        `;
+                      }
+                    )
+                    .join("")
+              }
+            </div>
+
+            <button
+              class="addmetric"
+              onclick="addScenarioAction('${scenario.id}')"
+            >
+              + Add action
+            </button>
+
+          </article>
+        `;
+      }
+    )
+    .join("");
 }
 
 function setSelectOptions(
@@ -381,6 +656,109 @@ async function deleteTimelinePoint(sensorId, metricId, index){
   timeline.splice(index, 1);
 
   await patchMetric(sensorId, metricId, {timeline});
+}
+
+async function addScenario(){
+  await api(
+    "/api/scenarios",
+    {
+      method:"POST",
+      body:JSON.stringify({
+        name:`Scenario ${(current.scenarios?.length || 0) + 1}`,
+        description:""
+      })
+    }
+  );
+
+  await refresh();
+}
+
+async function patchScenario(id, body){
+  await api(
+    `/api/scenarios/${id}`,
+    {
+      method:"PATCH",
+      body:JSON.stringify(body)
+    }
+  );
+
+  await refresh();
+}
+
+async function deleteScenario(id){
+  if(!confirm("Delete this scenario?")) return;
+
+  await api(
+    `/api/scenarios/${id}`,
+    {
+      method:"DELETE"
+    }
+  );
+
+  await refresh();
+}
+
+async function scenarioAction(id, actionName){
+  await api(
+    `/api/scenarios/${id}/${actionName}`,
+    {
+      method:"POST"
+    }
+  );
+
+  await refresh();
+}
+
+async function addScenarioAction(scenarioId){
+  const firstSensor =
+    current.sensors[0];
+
+  if(!firstSensor){
+    alert("Create at least one sensor first.");
+    return;
+  }
+
+  const firstMetric =
+    firstSensor.metrics?.[0];
+
+  await api(
+    `/api/scenarios/${scenarioId}/actions`,
+    {
+      method:"POST",
+      body:JSON.stringify({
+        offsetSeconds:0,
+        type:"SET_VALUE",
+        sensorId:firstSensor.id,
+        metricId:firstMetric?.id || null,
+        value:firstMetric?.value ?? ""
+      })
+    }
+  );
+
+  await refresh();
+}
+
+async function patchScenarioAction(scenarioId, actionId, body){
+  await api(
+    `/api/scenarios/${scenarioId}/actions/${actionId}`,
+    {
+      method:"PATCH",
+      body:JSON.stringify(body)
+    }
+  );
+
+  await refresh();
+}
+
+async function deleteScenarioAction(scenarioId, actionId){
+  await api(
+    `/api/scenarios/${scenarioId}/actions/${actionId}`,
+    {
+      method:"DELETE"
+    }
+  );
+
+  await refresh();
 }
 
 async function clearLogs(){ await api("/api/logs",{method:"DELETE"}); await refresh(); }

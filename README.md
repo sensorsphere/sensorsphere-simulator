@@ -98,3 +98,28 @@ The value is visible in the application header and in container startup logs.
 
 The HTTP server also sends `no-store` cache headers for the development UI,
 to prevent stale JavaScript/CSS after rebuilding the container.
+
+
+## SIM-005 scenarios
+
+SIM-005 adds first-class reusable scenarios.
+
+Supported scenario actions:
+
+- `SET_VALUE`
+- `ENABLE_METRIC`
+- `DISABLE_METRIC`
+- `START_SENSOR`
+- `STOP_SENSOR`
+- `PUBLISH_SENSOR`
+
+Each action has an offset in seconds relative to scenario start.
+
+Scenario states:
+
+- `STOPPED`
+- `RUNNING`
+- `PAUSED`
+- `COMPLETED`
+
+Scenarios and actions are persisted in `data/simulator.json`.
