@@ -14,8 +14,8 @@ services:
       MQTT_USERNAME: "${SIMULATOR_MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${SIMULATOR_MQTT_PASSWORD:-}"
       MQTT_TOPIC_PREFIX: "${SIMULATOR_MQTT_TOPIC_PREFIX:-sensors/ble_gateway/sensor}"
-      SIMULATOR_VERSION: "${SIMULATOR_VERSION:-SIM-017}"
-      SIMULATOR_BUILD: "${SIMULATOR_BUILD:-017}"
+      SIMULATOR_VERSION: "${SIMULATOR_VERSION:-SIM-018}"
+      SIMULATOR_BUILD: "${SIMULATOR_BUILD:-018}"
       DATA_FILE: "/app/data/simulator.json"
     volumes:
       - ./data:/app/data

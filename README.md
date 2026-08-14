@@ -293,3 +293,15 @@ Adds inline SVG icons to the three main Simulator tabs:
 - Publication log
 
 No external icon package or web dependency is required.
+
+## SIM-018 persistent Basic Injection state
+
+Basic Injection RUNNING / STOPPED state is now persisted in `data/simulator.json`.
+
+At backend startup:
+- sensors persisted with `enabled: true` are automatically restarted;
+- their publication timers are recreated using their configured interval;
+- sensors persisted with `enabled: false` remain stopped;
+- an INFO publication log entry records each automatic restart.
+
+This applies to backend/container restarts as long as the simulator data volume is preserved.

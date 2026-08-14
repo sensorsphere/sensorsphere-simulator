@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-017";
+  ?? "SIM-018";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "017";
+  ?? "018";
 
 const defaultState = {
   sensors: [{
@@ -97,7 +97,10 @@ async function loadState() {
       }
     }
     for (const sensor of state.sensors) {
-      sensor.enabled = false;
+      // Keep the persisted Basic Injection RUNNING / STOPPED state.
+      // Timers are recreated after loadState() has completed.
+      sensor.enabled =
+        sensor.enabled === true;
 
       for (const metric of sensor.metrics ?? []) {
         metric.mode ??= "manual";
@@ -1327,6 +1330,42 @@ client.on("reconnect", () => addLog({ status: "INFO", message: "MQTT reconnectin
 client.on("error", error => addLog({ status: "ERROR", message: `MQTT: ${error.message}` }));
 
 await loadState();
+
+// Restore Basic Injection timers from the persisted sensor state.
+// startSensor() calls stopSensor(), which temporarily clears enabled,
+// then recreates the publication timer and marks the sensor RUNNING.
+const sensorsToRestart =
+  state.sensors.filter(
+    sensor =>
+      sensor.enabled === true
+  );
+
+for (
+  const sensor
+  of sensorsToRestart
+) {
+  startSensor(
+    sensor
+  );
+
+  addLog({
+    status:
+      "INFO",
+    sensor:
+      sensor.name,
+    uid:
+      sensor.uid,
+    message:
+      "Basic injection automatically restarted after backend startup"
+  });
+}
+
+if (
+  sensorsToRestart.length >
+  0
+) {
+  await saveState();
+}
 
 const app = express();
 
