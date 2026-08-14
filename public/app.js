@@ -337,6 +337,20 @@ function renderScenarios() {
                 ${elapsed}s
               </span>
 
+              <button
+                class="btn-validate"
+                onclick="validateScenarioUi('${scenario.id}')"
+              >
+                Validate
+              </button>
+
+              <button
+                class="btn-ramp"
+                onclick="openRampGenerator('${scenario.id}')"
+              >
+                Generate ramp
+              </button>
+
               ${
                 scenario.status === "RUNNING"
                   ? `<button class="btn-pause" onclick="scenarioAction('${scenario.id}','pause')">Pause</button>`
@@ -359,6 +373,96 @@ function renderScenarios() {
                 Delete
               </button>
 
+            </div>
+
+            <div
+              id="scenario-validation-${scenario.id}"
+              class="scenario-validation"
+            ></div>
+
+            <div
+              id="ramp-generator-${scenario.id}"
+              class="ramp-generator"
+              hidden
+            >
+              <div class="ramp-grid">
+
+                <label>
+                  Sensor
+                  <select
+                    id="ramp-sensor-${scenario.id}"
+                    onchange="refreshRampMetrics('${scenario.id}')"
+                  >
+                    ${actionSensorOptions(current.sensors[0]?.uid)}
+                  </select>
+                </label>
+
+                <label>
+                  Metric
+                  <select
+                    id="ramp-metric-${scenario.id}"
+                  >
+                    ${actionMetricOptions(
+                      current.sensors[0]?.uid,
+                      current.sensors[0]?.metrics?.[0]?.key
+                    )}
+                  </select>
+                </label>
+
+                <label>
+                  Start
+                  <input
+                    id="ramp-start-${scenario.id}"
+                    value="25"
+                  >
+                </label>
+
+                <label>
+                  End
+                  <input
+                    id="ramp-end-${scenario.id}"
+                    value="31"
+                  >
+                </label>
+
+                <label>
+                  Step
+                  <input
+                    id="ramp-step-${scenario.id}"
+                    value="0.5"
+                  >
+                </label>
+
+                <label>
+                  Every
+                  <input
+                    id="ramp-every-${scenario.id}"
+                    type="number"
+                    min="1"
+                    value="15"
+                  >
+                  s
+                </label>
+
+                <label>
+                  Start at
+                  <input
+                    id="ramp-offset-${scenario.id}"
+                    type="number"
+                    min="0"
+                    value="0"
+                  >
+                  s
+                </label>
+
+                <button
+                  class="primary"
+                  onclick="generateRamp('${scenario.id}')"
+                >
+                  Add ramp actions
+                </button>
+
+              </div>
             </div>
 
             <div class="scenario-actions">
@@ -662,6 +766,158 @@ async function deleteTimelinePoint(sensorId, metricId, index){
   timeline.splice(index, 1);
 
   await patchMetric(sensorId, metricId, {timeline});
+}
+
+async function validateScenarioUi(id){
+  try {
+    const result =
+      await api(
+        `/api/scenarios/${id}/validate`
+      );
+
+    const target =
+      document.getElementById(
+        `scenario-validation-${id}`
+      );
+
+    if (!target) {
+      return;
+    }
+
+    if (result.valid) {
+      target.className =
+        "scenario-validation valid";
+
+      target.innerHTML =
+        "✓ Scenario valid";
+      return;
+    }
+
+    target.className =
+      "scenario-validation invalid";
+
+    target.innerHTML =
+      `<strong>Scenario invalid</strong><ul>${
+        result.issues.map(
+          issue =>
+            `<li>${esc(issue.message)}</li>`
+        ).join("")
+      }</ul>`;
+
+  } catch (error) {
+    alert(
+      `Validation failed: ${error.message}`
+    );
+  }
+}
+
+function openRampGenerator(id){
+  const target =
+    document.getElementById(
+      `ramp-generator-${id}`
+    );
+
+  if (!target) {
+    return;
+  }
+
+  target.hidden =
+    !target.hidden;
+}
+
+function refreshRampMetrics(id){
+  const sensorUid =
+    document.getElementById(
+      `ramp-sensor-${id}`
+    )?.value;
+
+  const metricSelect =
+    document.getElementById(
+      `ramp-metric-${id}`
+    );
+
+  if (!metricSelect) {
+    return;
+  }
+
+  metricSelect.innerHTML =
+    actionMetricOptions(
+      sensorUid,
+      null
+    );
+}
+
+async function generateRamp(id){
+  const sensorUid =
+    document.getElementById(
+      `ramp-sensor-${id}`
+    )?.value;
+
+  const metricKey =
+    document.getElementById(
+      `ramp-metric-${id}`
+    )?.value;
+
+  const startValue =
+    document.getElementById(
+      `ramp-start-${id}`
+    )?.value;
+
+  const endValue =
+    document.getElementById(
+      `ramp-end-${id}`
+    )?.value;
+
+  const step =
+    document.getElementById(
+      `ramp-step-${id}`
+    )?.value;
+
+  const everySeconds =
+    Number(
+      document.getElementById(
+        `ramp-every-${id}`
+      )?.value
+      ?? 15
+    );
+
+  const startOffsetSeconds =
+    Number(
+      document.getElementById(
+        `ramp-offset-${id}`
+      )?.value
+      ?? 0
+    );
+
+  try {
+    const result =
+      await api(
+        `/api/scenarios/${id}/generate-ramp`,
+        {
+          method:"POST",
+          body:JSON.stringify({
+            sensorUid,
+            metricKey,
+            startValue,
+            endValue,
+            step,
+            everySeconds,
+            startOffsetSeconds
+          })
+        }
+      );
+
+    alert(
+      `${result.generated} ramp actions added.`
+    );
+
+    await refresh();
+
+  } catch (error) {
+    alert(
+      `Ramp generation failed: ${error.message}`
+    );
+  }
 }
 
 async function addScenario(){

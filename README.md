@@ -143,3 +143,27 @@ are migrated to UID/key references when the state file is loaded.
 
 SIM-006 also prevents the automatic UI refresh from rebuilding scenario forms
 while an input/select/textarea inside a scenario has focus.
+
+
+## SIM-007 scenario validation and ramp generator
+
+SIM-007 adds:
+
+- `Validate` button for scenarios.
+- Invalid sensor/metric references are detected before execution.
+- Invalid scenarios cannot be started.
+- `Generate ramp` creates a sequence of `SET_VALUE` actions automatically.
+
+Example:
+
+```text
+Sensor: 11_22_33
+Metric: temperature
+Start: 25
+End: 31
+Step: 0.5
+Every: 15 seconds
+Start at: 0 seconds
+```
+
+This generates 13 actions from 25.0 through 31.0.

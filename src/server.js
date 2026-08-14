@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-006";
+  ?? "SIM-007";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "006";
+  ?? "007";
 
 const defaultState = {
   sensors: [{
@@ -614,9 +614,149 @@ function resetScenarioActions(
   }
 }
 
+function validateScenario(
+  scenario
+) {
+  const issues = [];
+
+  const actions =
+    scenario.actions ?? [];
+
+  if (
+    actions.length === 0
+  ) {
+    issues.push({
+      level: "ERROR",
+      message: "Scenario has no actions"
+    });
+  }
+
+  for (
+    const action
+    of actions
+  ) {
+    const sensor =
+      state.sensors.find(
+        current =>
+          current.uid ===
+            action.sensorUid
+      );
+
+    if (!sensor) {
+      issues.push({
+        level: "ERROR",
+        actionId: action.id,
+        message:
+          `Sensor not found: ${action.sensorUid || "(empty)"}`
+      });
+
+      continue;
+    }
+
+    if (
+      [
+        "SET_VALUE",
+        "ENABLE_METRIC",
+        "DISABLE_METRIC"
+      ].includes(
+        action.type
+      )
+    ) {
+      const metric =
+        sensor.metrics.find(
+          current =>
+            current.key ===
+            action.metricKey
+        );
+
+      if (!metric) {
+        issues.push({
+          level: "ERROR",
+          actionId: action.id,
+          message:
+            `Metric not found on ${sensor.uid}: ${action.metricKey || "(empty)"}`
+        });
+      }
+    }
+
+    if (
+      action.type ===
+        "SET_VALUE" &&
+      (
+        action.value ===
+          null ||
+        action.value ===
+          undefined ||
+        String(
+          action.value
+        ).trim() ===
+          ""
+      )
+    ) {
+      issues.push({
+        level: "ERROR",
+        actionId: action.id,
+        message:
+          "SET_VALUE requires a value"
+      });
+    }
+
+    if (
+      ![
+        "SET_VALUE",
+        "ENABLE_METRIC",
+        "DISABLE_METRIC",
+        "START_SENSOR",
+        "STOP_SENSOR",
+        "PUBLISH_SENSOR"
+      ].includes(
+        action.type
+      )
+    ) {
+      issues.push({
+        level: "ERROR",
+        actionId: action.id,
+        message:
+          `Unknown action type: ${action.type}`
+      });
+    }
+  }
+
+  return {
+    valid:
+      issues.every(
+        issue =>
+          issue.level !==
+          "ERROR"
+      ),
+
+    issues
+  };
+}
+
 function startScenario(
   scenario
 ) {
+  const validation =
+    validateScenario(
+      scenario
+    );
+
+  if (
+    !validation.valid
+  ) {
+    scenario.status =
+      "INVALID";
+
+    addLog({
+      status: "ERROR",
+      message:
+        `Scenario "${scenario.name}" is invalid`
+    });
+
+    return validation;
+  }
+
   const previous =
     scenarioTimers.get(
       scenario.id
@@ -656,6 +796,8 @@ function startScenario(
       1000
     )
   );
+
+  return validation;
 }
 
 function pauseScenario(
@@ -1056,6 +1198,28 @@ app.delete("/api/scenarios/:id", async (req, res) => {
   res.sendStatus(204);
 });
 
+app.get("/api/scenarios/:id/validate", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  const result =
+    validateScenario(
+      scenario
+    );
+
+  res.json(
+    result
+  );
+});
+
 app.post("/api/scenarios/:id/start", async (req, res) => {
   const scenario =
     state.scenarios.find(
@@ -1068,11 +1232,24 @@ app.post("/api/scenarios/:id/start", async (req, res) => {
     return res.sendStatus(404);
   }
 
-  startScenario(
-    scenario
-  );
+  const validation =
+    startScenario(
+      scenario
+    );
 
   await saveState();
+
+  if (
+    validation &&
+    !validation.valid
+  ) {
+    return res
+      .status(409)
+      .json({
+        scenario,
+        validation
+      });
+  }
 
   res.json(
     scenario
@@ -1146,6 +1323,198 @@ app.post("/api/scenarios/:id/stop", async (req, res) => {
   res.json(
     scenario
   );
+});
+
+app.post("/api/scenarios/:id/generate-ramp", async (req, res) => {
+  const scenario =
+    state.scenarios.find(
+      current =>
+        current.id ===
+        req.params.id
+    );
+
+  if (!scenario) {
+    return res.sendStatus(404);
+  }
+
+  const sensorUid =
+    String(
+      req.body.sensorUid
+      || ""
+    );
+
+  const metricKey =
+    String(
+      req.body.metricKey
+      || ""
+    );
+
+  const startValue =
+    Number(
+      req.body.startValue
+    );
+
+  const endValue =
+    Number(
+      req.body.endValue
+    );
+
+  const step =
+    Math.abs(
+      Number(
+        req.body.step
+      )
+    );
+
+  const everySeconds =
+    Math.max(
+      1,
+      Number(
+        req.body.everySeconds
+      ) || 1
+    );
+
+  const startOffsetSeconds =
+    Math.max(
+      0,
+      Number(
+        req.body.startOffsetSeconds
+      ) || 0
+    );
+
+  if (
+    !sensorUid ||
+    !metricKey ||
+    !Number.isFinite(
+      startValue
+    ) ||
+    !Number.isFinite(
+      endValue
+    ) ||
+    !Number.isFinite(
+      step
+    ) ||
+    step <= 0
+  ) {
+    return res
+      .status(400)
+      .json({
+        error:
+          "Invalid ramp parameters"
+      });
+  }
+
+  const direction =
+    endValue >= startValue
+      ? 1
+      : -1;
+
+  const generated = [];
+
+  let current =
+    startValue;
+
+  let offset =
+    startOffsetSeconds;
+
+  const decimals =
+    Math.max(
+      String(
+        req.body.startValue
+      ).split(".")[1]?.length
+        ?? 0,
+      String(
+        req.body.endValue
+      ).split(".")[1]?.length
+        ?? 0,
+      String(
+        req.body.step
+      ).split(".")[1]?.length
+        ?? 0
+    );
+
+  const formatValue =
+    value =>
+      Number(
+        value.toFixed(
+          Math.min(
+            decimals,
+            6
+          )
+        )
+      ).toString();
+
+  while (
+    direction > 0
+      ? current <=
+          endValue +
+          step /
+          1000
+      : current >=
+          endValue -
+          step /
+          1000
+  ) {
+    generated.push({
+      id:
+        crypto.randomUUID(),
+
+      offsetSeconds:
+        offset,
+
+      type:
+        "SET_VALUE",
+
+      sensorUid,
+      metricKey,
+
+      sensorId:
+        null,
+
+      metricId:
+        null,
+
+      value:
+        formatValue(
+          current
+        ),
+
+      executed:
+        false
+    });
+
+    current +=
+      step *
+      direction;
+
+    offset +=
+      everySeconds;
+
+    if (
+      generated.length >
+      10000
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Ramp would generate too many actions"
+        });
+    }
+  }
+
+  scenario.actions.push(
+    ...generated
+  );
+
+  await saveState();
+
+  res.status(201).json({
+    generated:
+      generated.length,
+    actions:
+      generated
+  });
 });
 
 app.post("/api/scenarios/:id/actions", async (req, res) => {
