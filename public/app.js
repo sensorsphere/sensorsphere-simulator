@@ -366,6 +366,10 @@ function renderScenarios() {
             scenario
           );
 
+        const locked =
+          scenario.status === "RUNNING" ||
+          scenario.status === "PAUSED";
+
         const statusClass =
           `scenario-${String(
             scenario.status
@@ -380,7 +384,7 @@ function renderScenarios() {
             );
 
         return `
-          <article class="scenario-card">
+          <article class="scenario-card ${locked ? "scenario-locked" : ""}">
 
             <div class="scenario-head">
               <div class="grow">
@@ -388,6 +392,7 @@ function renderScenarios() {
                 <input
                   class="scenario-name"
                   value="${esc(scenario.name)}"
+                  ${locked ? "disabled" : ""}
                   onchange="patchScenario('${scenario.id}',{name:this.value})"
                 >
 
@@ -395,6 +400,7 @@ function renderScenarios() {
                   class="scenario-description"
                   value="${esc(scenario.description || "")}"
                   placeholder="Description"
+                  ${locked ? "disabled" : ""}
                   onchange="patchScenario('${scenario.id}',{description:this.value})"
                 >
 
@@ -408,19 +414,14 @@ function renderScenarios() {
                 ${elapsed}s
               </span>
 
-              <button
-                class="btn-validate"
-                onclick="validateScenarioUi('${scenario.id}')"
-              >
-                Validate
-              </button>
-
-              <button
-                class="btn-ramp"
-                onclick="openRampGenerator('${scenario.id}')"
-              >
-                Generate ramp
-              </button>
+              ${
+                !locked
+                  ? `
+                    <button class="btn-validate" onclick="validateScenarioUi('${scenario.id}')">Validate</button>
+                    <button class="btn-ramp" onclick="openRampGenerator('${scenario.id}')">Generate ramp</button>
+                  `
+                  : ""
+              }
 
               ${
                 scenario.status === "RUNNING"
@@ -433,18 +434,26 @@ function renderScenarios() {
               <button
                 class="btn-stop"
                 onclick="scenarioAction('${scenario.id}','stop')"
+                ${locked ? "" : "disabled"}
               >
                 Stop
               </button>
 
-              <button
-                class="danger"
-                onclick="deleteScenario('${scenario.id}')"
-              >
-                Delete
-              </button>
+              ${
+                !locked
+                  ? `<button class="danger" onclick="deleteScenario('${scenario.id}')">Delete</button>`
+                  : ""
+              }
 
             </div>
+
+            ${
+              locked
+                ? `<div class="scenario-readonly-note">
+                    Scenario active — configuration locked. Stop the scenario to edit it.
+                  </div>`
+                : ""
+            }
 
             <div
               id="scenario-validation-${scenario.id}"
@@ -470,9 +479,7 @@ function renderScenarios() {
 
                 <label>
                   Metric
-                  <select
-                    id="ramp-metric-${scenario.id}"
-                  >
+                  <select id="ramp-metric-${scenario.id}">
                     ${actionMetricOptions(
                       current.sensors[0]?.uid,
                       current.sensors[0]?.metrics?.[0]?.key
@@ -482,54 +489,32 @@ function renderScenarios() {
 
                 <label>
                   Start
-                  <input
-                    id="ramp-start-${scenario.id}"
-                    value="25"
-                  >
+                  <input id="ramp-start-${scenario.id}" value="25">
                 </label>
 
                 <label>
                   End
-                  <input
-                    id="ramp-end-${scenario.id}"
-                    value="31"
-                  >
+                  <input id="ramp-end-${scenario.id}" value="31">
                 </label>
 
                 <label>
                   Step
-                  <input
-                    id="ramp-step-${scenario.id}"
-                    value="0.5"
-                  >
+                  <input id="ramp-step-${scenario.id}" value="0.5">
                 </label>
 
                 <label>
                   Every
-                  <input
-                    id="ramp-every-${scenario.id}"
-                    type="number"
-                    min="1"
-                    value="15"
-                  >
+                  <input id="ramp-every-${scenario.id}" type="number" min="1" value="15">
                   s
                 </label>
 
                 <label>
                   Start at
-                  <input
-                    id="ramp-offset-${scenario.id}"
-                    type="number"
-                    min="0"
-                    value="0"
-                  >
+                  <input id="ramp-offset-${scenario.id}" type="number" min="0" value="0">
                   s
                 </label>
 
-                <button
-                  class="primary"
-                  onclick="generateRamp('${scenario.id}')"
-                >
+                <button class="primary" onclick="generateRamp('${scenario.id}')">
                   Add ramp actions
                 </button>
 
@@ -557,12 +542,14 @@ function renderScenarios() {
                                 type="number"
                                 min="0"
                                 value="${action.offsetSeconds}"
+                                ${locked ? "disabled" : ""}
                                 onchange="patchScenarioAction('${scenario.id}','${action.id}',{offsetSeconds:Number(this.value)})"
                               >
                               s
                             </label>
 
                             <select
+                              ${locked ? "disabled" : ""}
                               onchange="patchScenarioAction('${scenario.id}','${action.id}',{type:this.value})"
                             >
                               <option value="SET_VALUE" ${action.type==="SET_VALUE"?"selected":""}>Set value</option>
@@ -574,6 +561,7 @@ function renderScenarios() {
                             </select>
 
                             <select
+                              ${locked ? "disabled" : ""}
                               onchange="patchScenarioAction('${scenario.id}','${action.id}',{sensorUid:this.value,metricKey:null})"
                             >
                               ${actionSensorOptions(action.sensorUid || current.sensors.find(s => s.id === action.sensorId)?.uid)}
@@ -582,6 +570,7 @@ function renderScenarios() {
                             ${
                               needsMetric
                                 ? `<select
+                                    ${locked ? "disabled" : ""}
                                     onchange="patchScenarioAction('${scenario.id}','${action.id}',{metricKey:this.value})"
                                   >
                                     ${actionMetricOptions(
@@ -598,17 +587,17 @@ function renderScenarios() {
                                     class="action-value"
                                     value="${esc(action.value ?? "")}"
                                     placeholder="value"
+                                    ${locked ? "disabled" : ""}
                                     onchange="patchScenarioAction('${scenario.id}','${action.id}',{value:this.value})"
                                   >`
                                 : `<span class="action-placeholder">—</span>`
                             }
 
-                            <button
-                              class="danger"
-                              onclick="deleteScenarioAction('${scenario.id}','${action.id}')"
-                            >
-                              ×
-                            </button>
+                            ${
+                              !locked
+                                ? `<button class="danger" onclick="deleteScenarioAction('${scenario.id}','${action.id}')">×</button>`
+                                : `<span class="action-placeholder">—</span>`
+                            }
 
                           </div>
                         `;
@@ -618,12 +607,11 @@ function renderScenarios() {
               }
             </div>
 
-            <button
-              class="addmetric"
-              onclick="addScenarioAction('${scenario.id}')"
-            >
-              + Add action
-            </button>
+            ${
+              !locked
+                ? `<button class="addmetric" onclick="addScenarioAction('${scenario.id}')">+ Add action</button>`
+                : ""
+            }
 
           </article>
         `;

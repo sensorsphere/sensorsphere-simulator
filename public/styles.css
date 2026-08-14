@@ -492,3 +492,29 @@ button:active{
   }
   .scenario-lock-banner{margin-left:0}
 }
+
+/* SIM-010 scenario runtime lock */
+.scenario-card.scenario-locked{
+  border-color:#f59e0b55;
+}
+.scenario-card input:disabled,
+.scenario-card select:disabled,
+.scenario-card button:disabled{
+  opacity:.65;
+  cursor:not-allowed;
+}
+.scenario-card input:disabled,
+.scenario-card select:disabled{
+  background:#f1f5f9;
+  color:#64748b;
+}
+.scenario-readonly-note{
+  margin:10px 12px 0;
+  padding:8px 10px;
+  border:1px solid #fde68a;
+  border-radius:7px;
+  background:#fffbeb;
+  color:#92400e;
+  font-size:12px;
+  font-weight:700;
+}

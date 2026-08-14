@@ -196,3 +196,13 @@ Basic Injection skips only the locked metric. Other metrics on the same
 sensor continue publishing. SET_VALUE scenario actions publish directly
 to MQTT. When the scenario becomes COMPLETED or STOPPED, the lock is
 released and Basic Injection resumes on the next normal cycle.
+
+
+## SIM-010 scenario runtime lock
+
+Scenario configuration is read-only while status is RUNNING or PAUSED.
+
+- RUNNING: Pause and Stop remain available.
+- PAUSED: Resume and Stop remain available.
+- Editing, deletion, validation, ramp generation and action changes are locked.
+- The API also rejects edits with HTTP 409 until the scenario is stopped.

@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-009";
+  ?? "SIM-010";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "009";
+  ?? "010";
 
 const defaultState = {
   sensors: [{
@@ -769,6 +769,39 @@ function resetScenarioActions(
   }
 }
 
+function scenarioIsLocked(
+  scenario
+) {
+  return (
+    scenario.status ===
+      "RUNNING" ||
+    scenario.status ===
+      "PAUSED"
+  );
+}
+
+function rejectLockedScenario(
+  scenario,
+  res
+) {
+  if (
+    !scenarioIsLocked(
+      scenario
+    )
+  ) {
+    return false;
+  }
+
+  res
+    .status(409)
+    .json({
+      error:
+        "Scenario is running or paused. Stop it before editing."
+    });
+
+  return true;
+}
+
 function validateScenario(
   scenario
 ) {
@@ -1299,6 +1332,15 @@ app.patch("/api/scenarios/:id", async (req, res) => {
   }
 
   if (
+    rejectLockedScenario(
+      scenario,
+      res
+    )
+  ) {
+    return;
+  }
+
+  if (
     req.body.name !==
     undefined
   ) {
@@ -1335,6 +1377,15 @@ app.delete("/api/scenarios/:id", async (req, res) => {
 
   if (!scenario) {
     return res.sendStatus(404);
+  }
+
+  if (
+    rejectLockedScenario(
+      scenario,
+      res
+    )
+  ) {
+    return;
   }
 
   stopScenario(
@@ -1490,6 +1541,15 @@ app.post("/api/scenarios/:id/generate-ramp", async (req, res) => {
 
   if (!scenario) {
     return res.sendStatus(404);
+  }
+
+  if (
+    rejectLockedScenario(
+      scenario,
+      res
+    )
+  ) {
+    return;
   }
 
   const sensorUid =
@@ -1684,6 +1744,15 @@ app.post("/api/scenarios/:id/actions", async (req, res) => {
     return res.sendStatus(404);
   }
 
+  if (
+    rejectLockedScenario(
+      scenario,
+      res
+    )
+  ) {
+    return;
+  }
+
   const action = {
     id: crypto.randomUUID(),
     offsetSeconds:
@@ -1762,6 +1831,15 @@ app.patch("/api/scenarios/:scenarioId/actions/:actionId", async (req, res) => {
 
   if (!action) {
     return res.sendStatus(404);
+  }
+
+  if (
+    rejectLockedScenario(
+      scenario,
+      res
+    )
+  ) {
+    return;
   }
 
   if (
@@ -1870,6 +1948,15 @@ app.delete("/api/scenarios/:scenarioId/actions/:actionId", async (req, res) => {
 
   if (!scenario) {
     return res.sendStatus(404);
+  }
+
+  if (
+    rejectLockedScenario(
+      scenario,
+      res
+    )
+  ) {
+    return;
   }
 
   scenario.actions =
