@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SensorSphere Simulator</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="icon" type="image/svg+xml" sizes="any" href="/sensorsphere-simulator.svg?v=16">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=16">
-  <link rel="shortcut icon" href="/favicon-32.png?v=16">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=16">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/sensorsphere-simulator.svg?v=17">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=17">
+  <link rel="shortcut icon" href="/favicon-32.png?v=17">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=17">
 </head>
 <body>
 <header>
@@ -22,7 +22,7 @@
       id="buildVersion"
       class="build-version"
     >
-      SIM-016 - build 016
+      SIM-017 - build 017
     </span>
   </div>
 
@@ -34,13 +34,25 @@
 
   <nav class="main-tabs">
     <button class="main-tab active" data-tab="basic" onclick="selectMainTab('basic')">
-      Basic injection
+      <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>
+      </svg>
+      <span>Basic injection</span>
     </button>
     <button class="main-tab" data-tab="scenarios" onclick="selectMainTab('scenarios')">
-      Scenarios
+      <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="m10 8 6 4-6 4V8Z"/>
+      </svg>
+      <span>Scenarios</span>
     </button>
     <button class="main-tab" data-tab="logs" onclick="selectMainTab('logs')">
-      Publication log
+      <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 5h16v14H4z"/>
+        <path d="m7 9 2 2-2 2"/>
+        <path d="M12 15h5"/>
+      </svg>
+      <span>Publication log</span>
     </button>
   </nav>
 

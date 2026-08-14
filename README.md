@@ -283,3 +283,13 @@ The copied scenario:
 - receives new scenario/action IDs;
 - resets action execution state;
 - preserves sensorUid / metricKey references and scenario configuration.
+
+## SIM-017 tab icons
+
+Adds inline SVG icons to the three main Simulator tabs:
+
+- Basic injection
+- Scenarios
+- Publication log
+
+No external icon package or web dependency is required.
