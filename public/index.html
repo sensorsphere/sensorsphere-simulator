@@ -18,7 +18,7 @@
       id="buildVersion"
       class="build-version"
     >
-      SIM-008 - build 008
+      SIM-009 - build 009
     </span>
   </div>
 
@@ -27,13 +27,30 @@
   </div>
 </header>
 <main>
-  <section class="toolbar">
-    <button class="primary" onclick="addSensor()">+ Add sensor</button>
-    <button onclick="action('/api/start-all')">▶ Start all</button>
-    <button onclick="action('/api/stop-all')">■ Stop all</button>
-    <button onclick="action('/api/publish-all')">Publish all now</button>
+
+  <nav class="main-tabs">
+    <button class="main-tab active" data-tab="basic" onclick="selectMainTab('basic')">
+      Basic injection
+    </button>
+    <button class="main-tab" data-tab="scenarios" onclick="selectMainTab('scenarios')">
+      Scenarios
+    </button>
+    <button class="main-tab" data-tab="logs" onclick="selectMainTab('logs')">
+      Publication log
+    </button>
+  </nav>
+
+  <section id="tab-basic" class="tab-panel">
+    <section class="toolbar">
+      <button class="primary" onclick="addSensor()">+ Add sensor</button>
+      <button class="btn-start" onclick="action('/api/start-all')">▶ Start all</button>
+      <button class="btn-stop" onclick="action('/api/stop-all')">■ Stop all</button>
+      <button class="btn-publish" onclick="action('/api/publish-all')">Publish all now</button>
+    </section>
+    <div id="sensors"></div>
   </section>
-  <div id="sensors"></div>
+
+  <section id="tab-scenarios" class="tab-panel" hidden>
   <section class="scenarios">
     <div class="section-title">
       <div>
@@ -51,7 +68,9 @@
 
     <div id="scenarios"></div>
   </section>
+  </section>
 
+  <section id="tab-logs" class="tab-panel" hidden>
   <section class="logs">
     <div class="section-title">
       <div>
@@ -114,6 +133,7 @@
         <tbody id="logRows"></tbody>
       </table>
     </div>
+  </section>
   </section>
 </main>
 <script src="/app.js"></script>

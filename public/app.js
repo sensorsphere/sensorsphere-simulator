@@ -1,5 +1,51 @@
 let current;
 
+const MAIN_TAB_KEY =
+  "sensorsphere.simulator.mainTab";
+
+function selectMainTab(tab) {
+  const selected =
+    ["basic", "scenarios", "logs"].includes(tab)
+      ? tab
+      : "basic";
+
+  document.querySelectorAll(".main-tab").forEach(
+    button => {
+      button.classList.toggle(
+        "active",
+        button.dataset.tab === selected
+      );
+    }
+  );
+
+  document.querySelectorAll(".tab-panel").forEach(
+    panel => {
+      panel.hidden =
+        panel.id !== `tab-${selected}`;
+    }
+  );
+
+  try {
+    localStorage.setItem(
+      MAIN_TAB_KEY,
+      selected
+    );
+  } catch {}
+}
+
+function restoreMainTab() {
+  let selected = "basic";
+
+  try {
+    selected =
+      localStorage.getItem(
+        MAIN_TAB_KEY
+      ) ?? "basic";
+  } catch {}
+
+  selectMainTab(selected);
+}
+
 async function api(url, options={}) {
   const response = await fetch(url, {
     headers: {"Content-Type":"application/json"},
@@ -142,6 +188,18 @@ function renderSensors() {
       <div class="metrics">
         ${sensor.metrics.map(metric => `
           <div class="metric-card">
+            ${
+              (current.scenarioLocks || []).some(
+                lock =>
+                  lock.sensorUid === sensor.uid &&
+                  lock.metricKey === metric.key
+              )
+                ? `<div class="scenario-lock-banner">
+                    Scenario controls ${esc(metric.key)} — basic injection paused for this metric
+                  </div>`
+                : ""
+            }
+
             <div class="metric-main">
               <input class="switch" type="checkbox" ${metric.enabled?"checked":""} onchange="patchMetric('${sensor.id}','${metric.id}',{enabled:this.checked})" title="Enable metric">
               <input value="${esc(metric.key)}" onchange="patchMetric('${sensor.id}','${metric.id}',{key:this.value})" placeholder="metric key">
@@ -1048,5 +1106,6 @@ async function deleteScenarioAction(scenarioId, actionId){
 
 async function clearLogs(){ await api("/api/logs",{method:"DELETE"}); await refresh(); }
 
+restoreMainTab();
 refresh();
 setInterval(refresh, 3000);

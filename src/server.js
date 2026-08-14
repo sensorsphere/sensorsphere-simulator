@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-008";
+  ?? "SIM-009";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "008";
+  ?? "009";
 
 const defaultState = {
   sensors: [{
@@ -135,6 +135,8 @@ function publicState() {
 
     sensors: state.sensors,
     scenarios: state.scenarios,
+    scenarioLocks:
+      activeScenarioLocks(),
     logs: state.logs.slice(0, LOG_LIMIT)
   };
 }
@@ -252,39 +254,169 @@ function generatedValue(metric) {
   }
 }
 
+function scenarioControlsPair(
+  scenario,
+  sensorUid,
+  metricKey
+) {
+  if (
+    scenario.status !== "RUNNING" &&
+    scenario.status !== "PAUSED"
+  ) {
+    return false;
+  }
+
+  return (scenario.actions ?? []).some(
+    action =>
+      action.sensorUid === sensorUid &&
+      action.metricKey === metricKey &&
+      [
+        "SET_VALUE",
+        "ENABLE_METRIC",
+        "DISABLE_METRIC"
+      ].includes(action.type)
+  );
+}
+
+function controllingScenarios(
+  sensorUid,
+  metricKey
+) {
+  return (state.scenarios ?? []).filter(
+    scenario =>
+      scenarioControlsPair(
+        scenario,
+        sensorUid,
+        metricKey
+      )
+  );
+}
+
+function activeScenarioLocks() {
+  const locks = [];
+
+  for (const sensor of state.sensors) {
+    for (const metric of sensor.metrics ?? []) {
+      const scenarios =
+        controllingScenarios(
+          sensor.uid,
+          metric.key
+        );
+
+      if (scenarios.length === 0) {
+        continue;
+      }
+
+      locks.push({
+        sensorUid: sensor.uid,
+        metricKey: metric.key,
+        scenarios: scenarios.map(
+          scenario => ({
+            id: scenario.id,
+            name: scenario.name,
+            status: scenario.status
+          })
+        )
+      });
+    }
+  }
+
+  return locks;
+}
+
+async function publishMetric(
+  sensor,
+  metric,
+  options = {}
+) {
+  const source =
+    options.source ?? "basic";
+
+  if (source === "basic") {
+    const controllers =
+      controllingScenarios(
+        sensor.uid,
+        metric.key
+      );
+
+    if (controllers.length > 0) {
+      return {
+        skipped: true,
+        reason: "scenario_controlled"
+      };
+    }
+  }
+
+  const topic =
+    topicFor(
+      sensor,
+      metric
+    );
+
+  const generated =
+    options.value !== undefined
+      ? String(options.value)
+      : generatedValue(metric);
+
+  try {
+    await client.publishAsync(
+      topic,
+      generated,
+      { retain: false }
+    );
+
+    addLog({
+      sensor: sensor.name,
+      uid: sensor.uid,
+      metric: metric.key,
+      value: generated,
+      topic,
+      status: "OK",
+      source
+    });
+
+    return {
+      skipped: false,
+      value: generated
+    };
+  } catch (error) {
+    addLog({
+      sensor: sensor.name,
+      uid: sensor.uid,
+      metric: metric.key,
+      value: generated,
+      topic,
+      status: "ERROR",
+      source,
+      message: error.message
+    });
+
+    return {
+      skipped: false,
+      error
+    };
+  }
+}
+
 async function publishSensor(sensor) {
   if (!client.connected) {
     addLog({ sensor: sensor.name, uid: sensor.uid, status: "ERROR", message: "MQTT disconnected" });
     return;
   }
 
-  const metrics = sensor.metrics.filter(m => m.enabled);
-  for (const metric of metrics) {
-    const topic = topicFor(sensor, metric);
-    const generated = generatedValue(metric);
+  const metrics =
+    sensor.metrics.filter(
+      metric => metric.enabled
+    );
 
-    try {
-      await client.publishAsync(topic, generated, { retain: false });
-      addLog({
-        sensor: sensor.name,
-        uid: sensor.uid,
-        metric: metric.key,
-        value: generated,
-        topic,
-        status: "OK"
-      });
-    } catch (error) {
-      addLog({
-        sensor: sensor.name,
-        uid: sensor.uid,
-        metric: metric.key,
-        value: generated,
-        topic,
-        status: "ERROR",
-        message: error.message
-      });
-    }
+  for (const metric of metrics) {
+    await publishMetric(
+      sensor,
+      metric,
+      { source: "basic" }
+    );
   }
+
   await saveState();
 }
 
@@ -427,6 +559,17 @@ async function applyScenarioAction(
           `Scenario "${scenario.name}" set value`
       });
 
+      await publishMetric(
+        sensor,
+        metric,
+        {
+          source:
+            `scenario:${scenario.name}`,
+          value:
+            metric.value
+        }
+      );
+
       break;
     }
 
@@ -521,9 +664,21 @@ async function applyScenarioAction(
       break;
 
     case "PUBLISH_SENSOR":
-      await publishSensor(
-        sensor
-      );
+      for (
+        const metric
+        of sensor.metrics.filter(
+          current => current.enabled
+        )
+      ) {
+        await publishMetric(
+          sensor,
+          metric,
+          {
+            source:
+              `scenario:${scenario.name}`
+          }
+        );
+      }
 
       break;
   }

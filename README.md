@@ -178,3 +178,21 @@ closed or a ramp has been generated.
 
 This prevents Start / End / Step / Every / Start-at values from being reset
 during editing.
+
+
+## SIM-009 tabs and scenario/basic arbitration
+
+The UI is split into three persisted tabs:
+
+- Basic injection
+- Scenarios
+- Publication log
+
+When a scenario is RUNNING or PAUSED, every sensorUid + metricKey pair
+controlled by SET_VALUE, ENABLE_METRIC or DISABLE_METRIC is locked for
+Basic Injection.
+
+Basic Injection skips only the locked metric. Other metrics on the same
+sensor continue publishing. SET_VALUE scenario actions publish directly
+to MQTT. When the scenario becomes COMPLETED or STOPPED, the lock is
+released and Basic Injection resumes on the next normal cycle.

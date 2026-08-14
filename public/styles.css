@@ -443,3 +443,52 @@ button:active{
     grid-template-columns:1fr;
   }
 }
+
+/* SIM-009 main tabs */
+.main-tabs{
+  display:flex;
+  gap:6px;
+  padding:5px;
+  margin-bottom:20px;
+  background:#e2e8f0;
+  border:1px solid #cbd5e1;
+  border-radius:11px;
+  width:max-content;
+  max-width:100%;
+}
+.main-tab{
+  border:0;
+  background:transparent;
+  color:#475569;
+  padding:9px 16px;
+  border-radius:8px;
+}
+.main-tab:hover{background:#ffffff88}
+.main-tab.active{
+  background:#fff;
+  color:#312e81;
+  box-shadow:0 1px 4px #0f172a18;
+}
+.tab-panel[hidden]{display:none}
+.tab-panel > .scenarios,
+.tab-panel > .logs{margin-top:0}
+
+/* SIM-009 scenario/basic arbitration */
+.scenario-lock-banner{
+  margin:0 0 8px 42px;
+  padding:6px 9px;
+  border-radius:7px;
+  background:#ede9fe;
+  border:1px solid #c4b5fd;
+  color:#5b21b6;
+  font-size:11px;
+  font-weight:750;
+}
+@media(max-width:700px){
+  .main-tabs{width:100%}
+  .main-tab{
+    flex:1;
+    padding:8px 6px;
+  }
+  .scenario-lock-banner{margin-left:0}
+}
