@@ -178,6 +178,12 @@ function renderSensors() {
         >
           Publish now
         </button>
+        <button
+          class="btn-copy"
+          onclick="copySensor('${sensor.id}')"
+        >
+          Copy
+        </button>
         <button class="danger" onclick="deleteSensor('${sensor.id}')">Delete</button>
       </div>
       <div class="config">
@@ -505,6 +511,13 @@ function renderScenarios() {
                 ${locked ? "" : "disabled"}
               >
                 Stop
+              </button>
+
+              <button
+                class="btn-copy"
+                onclick="copyScenario('${scenario.id}')"
+              >
+                Copy
               </button>
 
               ${
@@ -851,6 +864,17 @@ async function addSensor(){
   await api("/api/sensors",{method:"POST",body:JSON.stringify({name:`Test Sensor ${String(n).padStart(2,"0")}`,uid:`test_${String(n).padStart(2,"0")}`,intervalSeconds:15})});
   await refresh();
 }
+async function copySensor(id){
+  await api(
+    `/api/sensors/${id}/copy`,
+    {
+      method:"POST"
+    }
+  );
+
+  await refresh();
+}
+
 async function deleteSensor(id){
   if(!confirm("Delete this sensor?")) return;
   await api(`/api/sensors/${id}`,{method:"DELETE"}); await refresh();
@@ -1082,6 +1106,17 @@ async function patchScenario(id, body){
     {
       method:"PATCH",
       body:JSON.stringify(body)
+    }
+  );
+
+  await refresh();
+}
+
+async function copyScenario(id){
+  await api(
+    `/api/scenarios/${id}/copy`,
+    {
+      method:"POST"
     }
   );
 

@@ -263,3 +263,23 @@ Adds cache-busted favicon references and PNG fallbacks:
 - Apple touch icon: `/apple-touch-icon.png?v=15`
 
 This avoids stale browser favicon caches and improves compatibility.
+
+## SIM-016 copy Basic Injection and scenarios
+
+Basic Injection sensors can now be duplicated with `Copy`.
+
+The copy:
+- is named `Copy of <source name>`;
+- is created STOPPED;
+- receives new sensor and metric IDs;
+- preserves metric configuration;
+- receives a unique MQTT UID using `_copy`, `_copy_2`, etc.
+
+Scenarios can also be duplicated with `Copy`.
+
+The copied scenario:
+- is named `Copy of <source name>`;
+- is created STOPPED;
+- receives new scenario/action IDs;
+- resets action execution state;
+- preserves sensorUid / metricKey references and scenario configuration.

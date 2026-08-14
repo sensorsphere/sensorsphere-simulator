@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-015";
+  ?? "SIM-016";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "015";
+  ?? "016";
 
 const defaultState = {
   sensors: [{
@@ -1363,6 +1363,63 @@ app.use(express.static("public"));
 
 app.get("/api/state", (_req, res) => res.json(publicState()));
 
+function uniqueSensorUid(
+  sourceUid
+) {
+  const base =
+    `${sourceUid}_copy`;
+
+  let candidate =
+    base;
+
+  let suffix =
+    2;
+
+  while (
+    state.sensors.some(
+      sensor =>
+        sensor.uid ===
+        candidate
+    )
+  ) {
+    candidate =
+      `${base}_${suffix}`;
+
+    suffix +=
+      1;
+  }
+
+  return candidate;
+}
+
+function copySensorMetric(
+  metric
+) {
+  return {
+    ...metric,
+
+    id:
+      crypto.randomUUID(),
+
+    timeline:
+      Array.isArray(
+        metric.timeline
+      )
+        ? metric.timeline.map(
+            point => ({
+              ...point
+            })
+          )
+        : [],
+
+    timelineStartedAt:
+      null,
+
+    rampDirection:
+      1
+  };
+}
+
 app.post("/api/sensors", async (req, res) => {
   const sensor = {
     id: crypto.randomUUID(),
@@ -1375,6 +1432,54 @@ app.post("/api/sensors", async (req, res) => {
   state.sensors.push(sensor);
   await saveState();
   res.status(201).json(sensor);
+});
+
+app.post("/api/sensors/:id/copy", async (req, res) => {
+  const source =
+    state.sensors.find(
+      sensor =>
+        sensor.id ===
+        req.params.id
+    );
+
+  if (!source) {
+    return res.sendStatus(404);
+  }
+
+  const copied = {
+    ...source,
+
+    id:
+      crypto.randomUUID(),
+
+    uid:
+      uniqueSensorUid(
+        source.uid
+      ),
+
+    name:
+      `Copy of ${source.name}`,
+
+    enabled:
+      false,
+
+    metrics:
+      (source.metrics ?? []).map(
+        copySensorMetric
+      )
+  };
+
+  state.sensors.push(
+    copied
+  );
+
+  await saveState();
+
+  res
+    .status(201)
+    .json(
+      copied
+    );
 });
 
 app.patch("/api/sensors/:id", async (req, res) => {
@@ -1538,6 +1643,69 @@ app.post("/api/scenarios", async (req, res) => {
   res.status(201).json(
     scenario
   );
+});
+
+app.post("/api/scenarios/:id/copy", async (req, res) => {
+  const source =
+    state.scenarios.find(
+      scenario =>
+        scenario.id ===
+        req.params.id
+    );
+
+  if (!source) {
+    return res.sendStatus(404);
+  }
+
+  const copied = {
+    ...source,
+
+    id:
+      crypto.randomUUID(),
+
+    name:
+      `Copy of ${source.name}`,
+
+    status:
+      "STOPPED",
+
+    startedAt:
+      null,
+
+    pausedAt:
+      null,
+
+    elapsedBeforePause:
+      0,
+
+    runtimeSnapshot:
+      null,
+
+    actions:
+      (source.actions ?? []).map(
+        action => ({
+          ...action,
+
+          id:
+            crypto.randomUUID(),
+
+          executed:
+            false
+        })
+      )
+  };
+
+  state.scenarios.push(
+    copied
+  );
+
+  await saveState();
+
+  res
+    .status(201)
+    .json(
+      copied
+    );
 });
 
 app.patch("/api/scenarios/:id", async (req, res) => {
