@@ -1708,6 +1708,20 @@ function renderLogFilters() {
   );
 }
 
+function resetLogFilters() {
+  const period = document.getElementById("logPeriod");
+  const sensor = document.getElementById("logSensor");
+  const metric = document.getElementById("logMetric");
+  const status = document.getElementById("logStatus");
+
+  if (period) period.value = "5";
+  if (sensor) sensor.value = "";
+  if (metric) metric.value = "";
+  if (status) status.value = "";
+
+  renderLogs();
+}
+
 function renderLogs() {
   const periodMinutes =
     Number(
