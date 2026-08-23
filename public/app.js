@@ -142,9 +142,43 @@ function directFolderRuntimeSummary(kind, folderId) {
   );
 }
 
+function descendantFolderIds(kind, folderId) {
+  const result = new Set();
+  const visit = parentId => {
+    for (const child of folderChildren(kind, parentId)) {
+      if (result.has(child.id)) continue;
+      result.add(child.id);
+      visit(child.id);
+    }
+  };
+  visit(folderId);
+  return result;
+}
+
+function folderScopeRuntimeSummary(kind, folderId) {
+  const directItems = itemsFor(kind).filter(item => item.folderId === folderId);
+  const descendants = descendantFolderIds(kind, folderId);
+  const subItems = itemsFor(kind).filter(item => item.folderId && descendants.has(item.folderId));
+  const totalItems = [...directItems, ...subItems];
+  return {
+    direct: directItems.length,
+    sub: subItems.length,
+    total: totalItems.length,
+    runningDirect: directItems.filter(item => itemIsRunning(kind, item)).length,
+    runningSub: subItems.filter(item => itemIsRunning(kind, item)).length,
+    running: totalItems.filter(item => itemIsRunning(kind, item)).length,
+    subfolders: descendants.size
+  };
+}
+
 function folderRuntimeBadge(kind, folderId) {
-  const { running, total } = directFolderRuntimeSummary(kind, folderId);
-  return `<span class="folder-count ${running > 0 ? "has-running" : ""}" title="${running} running / ${total} total">${running}/${total}</span>`;
+  const summary = folderScopeRuntimeSummary(kind, folderId);
+  return `
+    <span class="folder-count-stack" title="${summary.running} running / ${summary.total} total · ${summary.direct} direct · ${summary.sub} in subfolders">
+      <span class="folder-count ${summary.running > 0 ? "has-running" : ""}">${summary.running}/${summary.total}</span>
+      <span class="folder-count-detail">${summary.direct}+${summary.sub}=${summary.total}</span>
+    </span>
+  `;
 }
 
 function visibleItems(kind) {
@@ -385,17 +419,30 @@ function renderFolderNavigation(kind) {
   `;
 
   if (context) {
-    const label = folderSelection[kind] === "__all__"
+    const selectedId = folderSelection[kind];
+    const label = selectedId === "__all__"
       ? "All items"
-      : folderSelection[kind] === "__unfiled__"
+      : selectedId === "__unfiled__"
         ? "Unfiled"
-        : folderById(kind, folderSelection[kind])?.name || "All items";
-    const summary = runtimeSummary(kind, visibleItems(kind));
-    context.innerHTML = `
-      <strong>${esc(label)}</strong>
-      <span class="folder-context-runtime ${summary.running > 0 ? "has-running" : ""}">${summary.running} running / ${summary.total} total</span>
-    `;
+        : folderById(kind, selectedId)?.name || "All items";
+
+    if (selectedId && !selectedId.startsWith("__")) {
+      const summary = folderScopeRuntimeSummary(kind, selectedId);
+      context.innerHTML = `
+        <strong>${esc(label)}</strong>
+        <span class="folder-context-runtime ${summary.running > 0 ? "has-running" : ""}">${summary.running} running / ${summary.total} total</span>
+        <span class="folder-context-breakdown">${summary.direct} direct · ${summary.sub} in subfolders · ${summary.total} total</span>
+      `;
+    } else {
+      const summary = selectedId === "__unfiled__" ? unfiledSummary : allSummary;
+      context.innerHTML = `
+        <strong>${esc(label)}</strong>
+        <span class="folder-context-runtime ${summary.running > 0 ? "has-running" : ""}">${summary.running} running / ${summary.total} total</span>
+      `;
+    }
   }
+
+  updateFolderScopeControls(kind);
 }
 
 function selectFolder(kind, id) {
@@ -427,10 +474,115 @@ async function renameFolder(kind, id) {
 async function deleteFolder(kind, id) {
   const folder = folderById(kind, id);
   if (!folder) return;
-  if (!confirm(`Delete folder "${folder.name}"? Items and child folders will be moved to its parent; no injection/scenario will be deleted.`)) return;
-  await api(`/api/folders/${kind}/${id}`, { method: "DELETE" });
-  if (folderSelection[kind] === id) folderSelection[kind] = folder.parentId || "__unfiled__";
-  saveFolderSelection();
+
+  const summary = folderScopeRuntimeSummary(kind, id);
+  const itemLabel = kind === "basic" ? "Basic Injection" : "Scenario";
+  const descendants = descendantFolderIds(kind, id);
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="delete-folder-dialog" role="dialog" aria-modal="true" aria-label="Delete folder">
+      <h3>Delete folder "${esc(folder.name)}"?</h3>
+      <div class="delete-folder-summary">
+        <span><strong>${summary.direct}</strong> direct ${itemLabel}${summary.direct === 1 ? "" : "s"}</span>
+        <span><strong>${summary.sub}</strong> ${itemLabel}${summary.sub === 1 ? "" : "s"} in subfolders</span>
+        <span><strong>${summary.subfolders}</strong> subfolder${summary.subfolders === 1 ? "" : "s"}</span>
+      </div>
+
+      <label class="delete-folder-choice">
+        <input type="radio" name="deleteFolderMode" value="promote" checked>
+        <span>
+          <strong>Delete folder only</strong>
+          <small>Direct items and child folders are moved to the parent folder.</small>
+        </span>
+      </label>
+
+      <label class="delete-folder-choice delete-folder-choice-danger">
+        <input type="radio" name="deleteFolderMode" value="recursive">
+        <span>
+          <strong>Delete folder and everything inside</strong>
+          <small>Deletes ${summary.subfolders + 1} folder${summary.subfolders + 1 === 1 ? "" : "s"} and ${summary.total} ${itemLabel}${summary.total === 1 ? "" : "s"}. This operation cannot be undone.</small>
+        </span>
+      </label>
+
+      <div class="move-folder-actions">
+        <button type="button" data-action="cancel">Cancel</button>
+        <button type="button" class="danger delete-folder-confirm" data-action="delete">Delete folder</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  const deleteButton = overlay.querySelector('[data-action="delete"]');
+  const syncButton = () => {
+    const recursive = overlay.querySelector('input[name="deleteFolderMode"]:checked')?.value === "recursive";
+    deleteButton.textContent = recursive ? "Delete everything" : "Delete folder";
+    deleteButton.classList.toggle("destructive", recursive);
+  };
+
+  overlay.addEventListener("change", syncButton);
+  overlay.addEventListener("click", event => {
+    if (event.target === overlay || event.target.dataset.action === "cancel") close();
+  });
+
+  deleteButton.addEventListener("click", async () => {
+    const recursive = overlay.querySelector('input[name="deleteFolderMode"]:checked')?.value === "recursive";
+    try {
+      await api(`/api/folders/${kind}/${id}?mode=${recursive ? "recursive" : "promote"}`, { method: "DELETE" });
+
+      const selected = folderSelection[kind];
+      if (
+        selected === id ||
+        (recursive && selected && !selected.startsWith("__") && descendants.has(selected))
+      ) {
+        folderSelection[kind] = folder.parentId || "__unfiled__";
+      }
+      saveFolderSelection();
+      close();
+      await refresh();
+    } catch (error) {
+      alert(`Delete failed: ${error.message}`);
+    }
+  });
+
+  syncButton();
+}
+
+function updateFolderScopeControls(kind) {
+  const selected = folderSelection[kind] || "__all__";
+  const wrapper = document.getElementById(kind === "basic" ? "basicRecursiveWrap" : "scenarioRecursiveWrap");
+  if (!wrapper) return;
+  wrapper.hidden = selected.startsWith("__");
+}
+
+async function folderBulkAction(kind, actionName) {
+  const selected = folderSelection[kind] || "__all__";
+  const recursiveInput = document.getElementById(kind === "basic" ? "basicRecursiveScope" : "scenarioRecursiveScope");
+  let scope = "folder";
+  let folderId = null;
+  let recursive = Boolean(recursiveInput?.checked);
+
+  if (selected === "__all__") {
+    scope = "all";
+    recursive = true;
+  } else if (selected === "__unfiled__") {
+    scope = "unfiled";
+    recursive = false;
+  } else {
+    folderId = selected;
+  }
+
+  const result = await api(`/api/bulk/${kind}/${actionName}`, {
+    method: "POST",
+    body: JSON.stringify({ scope, folderId, recursive })
+  });
+
+  if (result?.failed) {
+    alert(`${result.applied} item(s) processed, ${result.failed} failed.`);
+  }
+
   await refresh();
 }
 

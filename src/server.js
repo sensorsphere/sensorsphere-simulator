@@ -160,6 +160,38 @@ function itemsForKind(kind) {
   return null;
 }
 
+function scopedItems(kind, scope, folderId, recursive = false) {
+  const items = itemsForKind(kind);
+  if (!items) {
+    const error = new Error("Unknown item type");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (scope === "all") return [...items];
+  if (scope === "unfiled") return items.filter(item => !item.folderId);
+
+  if (scope !== "folder") {
+    const error = new Error("Unknown scope");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const validFolderId = validateFolderTarget(kind, folderId);
+  if (!validFolderId) {
+    const error = new Error("Folder not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!recursive) {
+    return items.filter(item => item.folderId === validFolderId);
+  }
+
+  const ids = folderDescendantIds(kind, validFolderId);
+  return items.filter(item => item.folderId && ids.has(item.folderId));
+}
+
 function normalizeFolderAssignments() {
   state.folders ??= { basic: [], scenarios: [] };
   state.folders.basic ??= [];
@@ -1733,6 +1765,31 @@ app.delete("/api/folders/:kind/:id", async (req, res) => {
   const folder = folders?.find(current => current.id === req.params.id);
   if (!folder) return res.sendStatus(404);
 
+  const mode = req.query.mode === "recursive" ? "recursive" : "promote";
+
+  if (mode === "recursive") {
+    const ids = folderDescendantIds(kind, folder.id);
+    const items = itemsForKind(kind) ?? [];
+    const deletedItems = items.filter(item => item.folderId && ids.has(item.folderId));
+
+    if (kind === "basic") {
+      deletedItems.forEach(stopSensor);
+      state.sensors = state.sensors.filter(item => !item.folderId || !ids.has(item.folderId));
+    } else {
+      deletedItems.forEach(stopScenario);
+      state.scenarios = state.scenarios.filter(item => !item.folderId || !ids.has(item.folderId));
+    }
+
+    const deletedFolders = folders.filter(current => ids.has(current.id));
+    state.folders[kind] = folders.filter(current => !ids.has(current.id));
+    await saveState();
+    return res.json({
+      mode,
+      foldersDeleted: deletedFolders.length,
+      itemsDeleted: deletedItems.length
+    });
+  }
+
   for (const child of folders) {
     if (child.parentId === folder.id) child.parentId = folder.parentId ?? null;
   }
@@ -1741,7 +1798,85 @@ app.delete("/api/folders/:kind/:id", async (req, res) => {
   }
   state.folders[kind] = folders.filter(current => current.id !== folder.id);
   await saveState();
-  res.sendStatus(204);
+  res.json({ mode, foldersDeleted: 1, itemsDeleted: 0 });
+});
+
+app.post("/api/bulk/:kind/:action", async (req, res) => {
+  const kind = req.params.kind;
+  const action = req.params.action;
+
+  if (!FOLDER_KINDS.has(kind)) {
+    return res.status(404).json({ error: "Unknown item type" });
+  }
+
+  const allowed = kind === "basic"
+    ? new Set(["start", "stop", "publish"])
+    : new Set(["start", "stop"]);
+
+  if (!allowed.has(action)) {
+    return res.status(400).json({ error: `Unsupported ${kind} bulk action: ${action}` });
+  }
+
+  let items;
+  try {
+    items = scopedItems(
+      kind,
+      req.body.scope ?? "all",
+      req.body.folderId ?? null,
+      req.body.recursive === true
+    );
+  } catch (error) {
+    return res.status(error.statusCode ?? 500).json({ error: error.message });
+  }
+
+  let applied = 0;
+  const failures = [];
+
+  if (kind === "basic") {
+    for (const sensor of items) {
+      try {
+        if (action === "start") startSensor(sensor);
+        else if (action === "stop") stopSensor(sensor);
+        else await publishSensor(sensor);
+        applied += 1;
+      } catch (error) {
+        failures.push({ id: sensor.id, name: sensor.name, error: error.message });
+      }
+    }
+  } else {
+    for (const scenario of items) {
+      try {
+        if (action === "stop") {
+          stopScenario(scenario);
+          applied += 1;
+          continue;
+        }
+
+        const validation = startScenario(scenario);
+        if (validation && !validation.valid) {
+          failures.push({
+            id: scenario.id,
+            name: scenario.name,
+            error: "Scenario validation failed",
+            validation
+          });
+          continue;
+        }
+        applied += 1;
+      } catch (error) {
+        failures.push({ id: scenario.id, name: scenario.name, error: error.message });
+      }
+    }
+  }
+
+  if (action !== "publish") await saveState();
+
+  res.json({
+    matched: items.length,
+    applied,
+    failed: failures.length,
+    failures
+  });
 });
 
 app.post("/api/sensors", async (req, res) => {

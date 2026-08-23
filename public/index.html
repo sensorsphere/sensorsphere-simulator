@@ -100,9 +100,13 @@
       <div class="library-content">
         <section class="toolbar library-toolbar">
           <button class="primary" onclick="addSensor()">+ Add sensor</button>
-          <button class="btn-start" onclick="action('/api/start-all')">▶ Start all</button>
-          <button class="btn-stop" onclick="action('/api/stop-all')">■ Stop all</button>
-          <button class="btn-publish" onclick="action('/api/publish-all')">Publish all now</button>
+          <button class="btn-start" onclick="folderBulkAction('basic','start')">▶ Start all</button>
+          <button class="btn-stop" onclick="folderBulkAction('basic','stop')">■ Stop all</button>
+          <button class="btn-publish" onclick="folderBulkAction('basic','publish')">Publish all now</button>
+          <label id="basicRecursiveWrap" class="recursive-scope">
+            <input id="basicRecursiveScope" type="checkbox">
+            Include subfolders
+          </label>
           <span class="toolbar-spacer"></span>
           <button onclick="exportLibrary('basic',false)">Export all</button>
           <button onclick="exportLibrary('basic',true)">Export current</button>
@@ -135,6 +139,12 @@
               <span>Automated sensor and metric changes</span>
             </div>
             <div class="section-actions">
+              <button class="btn-start" onclick="folderBulkAction('scenarios','start')">▶ Start all</button>
+              <button class="btn-stop" onclick="folderBulkAction('scenarios','stop')">■ Stop all</button>
+              <label id="scenarioRecursiveWrap" class="recursive-scope">
+                <input id="scenarioRecursiveScope" type="checkbox">
+                Include subfolders
+              </label>
               <button onclick="exportLibrary('scenarios',false)">Export all</button>
               <button onclick="exportLibrary('scenarios',true)">Export current</button>
               <button onclick="document.getElementById('scenarioImportFile').click()">Import</button>

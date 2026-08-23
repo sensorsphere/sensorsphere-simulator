@@ -1197,3 +1197,104 @@ input:focus,select:focus,textarea:focus{
     padding-right:8px;
   }
 }
+
+
+/* SIM-025 / PR-075 folder-scoped actions, recursive counters and delete dialog */
+.folder-count-stack{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:2px;
+  min-width:54px;
+}
+.folder-count-detail{
+  font-size:9px;
+  line-height:1;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.folder-node:hover>.folder-row .folder-count-stack{visibility:hidden}
+.folder-context-breakdown{
+  color:var(--muted) !important;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.recursive-scope{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 8px;
+  border:1px solid var(--border);
+  border-radius:7px;
+  background:var(--surface-soft);
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.recursive-scope input{
+  width:auto;
+  margin:0;
+  accent-color:var(--cyan);
+}
+.delete-folder-dialog{
+  width:min(560px,94vw);
+  padding:18px;
+  border:1px solid color-mix(in srgb,var(--brand) 60%,var(--border));
+  border-radius:12px;
+  background:var(--surface);
+  color:var(--text);
+  box-shadow:0 20px 70px #0009,0 0 24px color-mix(in srgb,var(--brand) 22%,transparent);
+}
+.delete-folder-dialog h3{margin:0 0 12px}
+.delete-folder-summary{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:0 0 14px;
+}
+.delete-folder-summary span{
+  padding:5px 8px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  background:var(--surface-soft);
+  color:var(--muted);
+  font-size:11px;
+}
+.delete-folder-choice{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:11px 12px;
+  margin:8px 0;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:var(--surface-soft);
+  cursor:pointer;
+}
+.delete-folder-choice input{
+  width:auto;
+  margin:3px 0 0;
+  accent-color:var(--cyan);
+}
+.delete-folder-choice span{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.delete-folder-choice small{color:var(--muted)}
+.delete-folder-choice-danger{
+  border-color:color-mix(in srgb,var(--danger-theme) 34%,var(--border));
+}
+.delete-folder-choice-danger strong{color:var(--danger-theme)}
+.delete-folder-confirm.destructive{
+  color:#fff !important;
+  background:var(--danger-theme) !important;
+  border-color:var(--danger-theme) !important;
+}
+@media(max-width:900px){
+  .folder-context{flex-wrap:wrap}
+  .folder-context-breakdown{white-space:normal}
+}
+.recursive-scope[hidden]{display:none}
