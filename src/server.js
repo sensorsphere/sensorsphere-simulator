@@ -13,11 +13,11 @@ const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
-  ?? "SIM-019";
+  ?? "SIM-020";
 
 const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
-  ?? "019";
+  ?? "020";
 
 const defaultState = {
   sensors: [{
@@ -36,6 +36,7 @@ const defaultState = {
     ]
   }],
   scenarios: [],
+  folders: { basic: [], scenarios: [] },
   logs: []
 };
 
@@ -49,6 +50,11 @@ async function loadState() {
     state.logs ??= [];
     state.sensors ??= [];
     state.scenarios ??= [];
+    state.folders ??= {};
+    state.folders.basic ??= [];
+    state.folders.scenarios ??= [];
+
+    normalizeFolderAssignments();
 
     for (const scenario of state.scenarios) {
       scenario.status = "STOPPED";
@@ -131,6 +137,178 @@ async function saveState() {
   await fs.writeFile(DATA_FILE, JSON.stringify(state, null, 2));
 }
 
+
+const EXPORT_FORMAT = "sensorsphere-simulator";
+const EXPORT_VERSION = 1;
+const FOLDER_KINDS = new Set(["basic", "scenarios"]);
+
+function folderCollection(kind) {
+  if (!FOLDER_KINDS.has(kind)) return null;
+  state.folders ??= { basic: [], scenarios: [] };
+  state.folders[kind] ??= [];
+  return state.folders[kind];
+}
+
+function itemsForKind(kind) {
+  if (kind === "basic") return state.sensors;
+  if (kind === "scenarios") return state.scenarios;
+  return null;
+}
+
+function normalizeFolderAssignments() {
+  state.folders ??= { basic: [], scenarios: [] };
+  state.folders.basic ??= [];
+  state.folders.scenarios ??= [];
+
+  for (const kind of ["basic", "scenarios"]) {
+    const folders = state.folders[kind];
+    const validIds = new Set(folders.map(folder => folder.id));
+
+    for (const folder of folders) {
+      folder.name = String(folder.name || "Folder");
+      if (!validIds.has(folder.parentId) || folder.parentId === folder.id) {
+        folder.parentId = null;
+      }
+    }
+
+    for (const item of itemsForKind(kind) ?? []) {
+      if (!validIds.has(item.folderId)) item.folderId = null;
+    }
+  }
+}
+
+function folderDescendantIds(kind, folderId) {
+  const folders = folderCollection(kind) ?? [];
+  const result = new Set([folderId]);
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    for (const folder of folders) {
+      if (folder.parentId && result.has(folder.parentId) && !result.has(folder.id)) {
+        result.add(folder.id);
+        changed = true;
+      }
+    }
+  }
+
+  return result;
+}
+
+function validateFolderTarget(kind, folderId) {
+  if (folderId === null || folderId === undefined || folderId === "") return null;
+  const folder = (folderCollection(kind) ?? []).find(current => current.id === folderId);
+  return folder ? folder.id : undefined;
+}
+
+function exportDocument(kind, folderId = null) {
+  const allFolders = folderCollection(kind) ?? [];
+  const allItems = itemsForKind(kind) ?? [];
+  let folders = allFolders;
+  let items = allItems;
+
+  if (folderId) {
+    const ids = folderDescendantIds(kind, folderId);
+    folders = allFolders.filter(folder => ids.has(folder.id));
+    items = allItems.filter(item => ids.has(item.folderId));
+  }
+
+  return {
+    format: EXPORT_FORMAT,
+    version: EXPORT_VERSION,
+    type: kind === "basic" ? "basic-injections" : "scenarios",
+    exportedAt: new Date().toISOString(),
+    folders: structuredClone(folders),
+    items: structuredClone(items)
+  };
+}
+
+function cleanImportedMetric(metric) {
+  return {
+    ...metric,
+    id: crypto.randomUUID(),
+    key: String(metric.key || "metric"),
+    value: String(metric.value ?? "0"),
+    unit: String(metric.unit ?? ""),
+    topic: metric.topic ? String(metric.topic) : undefined,
+    enabled: metric.enabled !== false,
+    mode: ["manual", "random", "ramp", "timeline"].includes(metric.mode) ? metric.mode : "manual",
+    randomMin: String(metric.randomMin ?? metric.value ?? "0"),
+    randomMax: String(metric.randomMax ?? metric.value ?? "0"),
+    rampStart: String(metric.rampStart ?? metric.value ?? "0"),
+    rampEnd: String(metric.rampEnd ?? metric.value ?? "0"),
+    rampStep: String(metric.rampStep ?? "1"),
+    rampDirection: metric.rampDirection === -1 ? -1 : 1,
+    timeline: Array.isArray(metric.timeline) ? metric.timeline.map(point => ({
+      offsetSeconds: Math.max(0, Number(point.offsetSeconds) || 0),
+      value: String(point.value ?? "")
+    })) : [],
+    timelineStartedAt: null
+  };
+}
+
+function importDocument(kind, document) {
+  const expectedType = kind === "basic" ? "basic-injections" : "scenarios";
+  if (!document || document.format !== EXPORT_FORMAT || Number(document.version) !== EXPORT_VERSION || document.type !== expectedType) {
+    const error = new Error(`Invalid import document. Expected ${EXPORT_FORMAT} v${EXPORT_VERSION} (${expectedType}).`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const importedFolders = Array.isArray(document.folders) ? document.folders : [];
+  const importedItems = Array.isArray(document.items) ? document.items : [];
+  const folderIdMap = new Map();
+  const newFolders = importedFolders.map(folder => {
+    const id = crypto.randomUUID();
+    folderIdMap.set(folder.id, id);
+    return { id, name: String(folder.name || "Imported folder"), parentId: folder.parentId ?? null };
+  });
+
+  for (const folder of newFolders) {
+    const source = importedFolders.find(item => folderIdMap.get(item.id) === folder.id);
+    folder.parentId = source?.parentId ? folderIdMap.get(source.parentId) ?? null : null;
+  }
+
+  const newItems = importedItems.map(item => {
+    if (kind === "basic") {
+      return {
+        ...item,
+        id: crypto.randomUUID(),
+        name: String(item.name || "Imported injection"),
+        uid: String(item.uid || `import_${Date.now()}`),
+        enabled: false,
+        intervalSeconds: Math.max(1, Number(item.intervalSeconds) || 15),
+        topicPrefix: normalizeTopicPrefix(item.topicPrefix ?? TOPIC_PREFIX),
+        folderId: item.folderId ? folderIdMap.get(item.folderId) ?? null : null,
+        metrics: Array.isArray(item.metrics) ? item.metrics.map(cleanImportedMetric) : []
+      };
+    }
+
+    return {
+      ...item,
+      id: crypto.randomUUID(),
+      name: String(item.name || "Imported scenario"),
+      description: String(item.description || ""),
+      folderId: item.folderId ? folderIdMap.get(item.folderId) ?? null : null,
+      status: "STOPPED",
+      startedAt: null,
+      pausedAt: null,
+      elapsedBeforePause: 0,
+      runtimeSnapshot: null,
+      actions: Array.isArray(item.actions) ? item.actions.map(action => ({
+        ...action,
+        id: crypto.randomUUID(),
+        executed: false
+      })) : []
+    };
+  });
+
+  folderCollection(kind).push(...newFolders);
+  itemsForKind(kind).push(...newItems);
+
+  return { folders: newFolders.length, items: newItems.length };
+}
+
 function publicState() {
   return {
     application: {
@@ -145,6 +323,7 @@ function publicState() {
     },
 
     sensors: state.sensors,
+    folders: state.folders,
 
     scenarios:
       state.scenarios.map(
@@ -183,6 +362,9 @@ function normalizeTopicPrefix(value) {
 }
 
 function topicFor(sensor, metric, source = "basic") {
+  const explicitTopic = String(metric.topic ?? "").trim();
+  if (explicitTopic) return explicitTopic.replace(/^\/+|\/+$/g, "");
+
   const prefix =
     source === "basic"
       ? normalizeTopicPrefix(sensor.topicPrefix ?? TOPIC_PREFIX)
@@ -1481,6 +1663,78 @@ function copySensorMetric(
   };
 }
 
+
+app.get("/api/export/:kind", (req, res) => {
+  const kind = req.params.kind;
+  if (!FOLDER_KINDS.has(kind)) return res.status(404).json({ error: "Unknown export type" });
+  const folderId = req.query.folderId ? String(req.query.folderId) : null;
+  if (folderId && !(folderCollection(kind) ?? []).some(folder => folder.id === folderId)) {
+    return res.status(404).json({ error: "Folder not found" });
+  }
+  res.json(exportDocument(kind, folderId));
+});
+
+app.post("/api/import/:kind", async (req, res) => {
+  const kind = req.params.kind;
+  if (!FOLDER_KINDS.has(kind)) return res.status(404).json({ error: "Unknown import type" });
+  try {
+    const result = importDocument(kind, req.body);
+    await saveState();
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(error.statusCode ?? 500).json({ error: error.message });
+  }
+});
+
+app.post("/api/folders/:kind", async (req, res) => {
+  const kind = req.params.kind;
+  const folders = folderCollection(kind);
+  if (!folders) return res.status(404).json({ error: "Unknown folder type" });
+  const parentId = validateFolderTarget(kind, req.body.parentId);
+  if (parentId === undefined) return res.status(400).json({ error: "Unknown parent folder" });
+  const folder = { id: crypto.randomUUID(), name: String(req.body.name || "New folder"), parentId };
+  folders.push(folder);
+  await saveState();
+  res.status(201).json(folder);
+});
+
+app.patch("/api/folders/:kind/:id", async (req, res) => {
+  const kind = req.params.kind;
+  const folders = folderCollection(kind);
+  const folder = folders?.find(current => current.id === req.params.id);
+  if (!folder) return res.sendStatus(404);
+
+  if (req.body.name !== undefined) folder.name = String(req.body.name || "Folder");
+  if (req.body.parentId !== undefined) {
+    const parentId = validateFolderTarget(kind, req.body.parentId);
+    if (parentId === undefined) return res.status(400).json({ error: "Unknown parent folder" });
+    if (parentId === folder.id || (parentId && folderDescendantIds(kind, folder.id).has(parentId))) {
+      return res.status(400).json({ error: "A folder cannot be moved inside itself" });
+    }
+    folder.parentId = parentId;
+  }
+
+  await saveState();
+  res.json(folder);
+});
+
+app.delete("/api/folders/:kind/:id", async (req, res) => {
+  const kind = req.params.kind;
+  const folders = folderCollection(kind);
+  const folder = folders?.find(current => current.id === req.params.id);
+  if (!folder) return res.sendStatus(404);
+
+  for (const child of folders) {
+    if (child.parentId === folder.id) child.parentId = folder.parentId ?? null;
+  }
+  for (const item of itemsForKind(kind) ?? []) {
+    if (item.folderId === folder.id) item.folderId = folder.parentId ?? null;
+  }
+  state.folders[kind] = folders.filter(current => current.id !== folder.id);
+  await saveState();
+  res.sendStatus(204);
+});
+
 app.post("/api/sensors", async (req, res) => {
   const sensor = {
     id: crypto.randomUUID(),
@@ -1489,6 +1743,7 @@ app.post("/api/sensors", async (req, res) => {
     enabled: false,
     intervalSeconds: Math.max(1, Number(req.body.intervalSeconds) || 15),
     topicPrefix: normalizeTopicPrefix(req.body.topicPrefix ?? TOPIC_PREFIX),
+    folderId: validateFolderTarget("basic", req.body.folderId) ?? null,
     metrics: []
   };
   state.sensors.push(sensor);
@@ -1525,6 +1780,9 @@ app.post("/api/sensors/:id/copy", async (req, res) => {
     enabled:
       false,
 
+    folderId:
+      source.folderId ?? null,
+
     metrics:
       (source.metrics ?? []).map(
         copySensorMetric
@@ -1555,6 +1813,11 @@ app.patch("/api/sensors/:id", async (req, res) => {
     sensor.topicPrefix = normalizeTopicPrefix(req.body.topicPrefix);
   if (req.body.intervalSeconds !== undefined)
     sensor.intervalSeconds = Math.max(1, Number(req.body.intervalSeconds) || 15);
+  if (req.body.folderId !== undefined) {
+    const folderId = validateFolderTarget("basic", req.body.folderId);
+    if (folderId === undefined) return res.status(400).json({ error: "Unknown folder" });
+    sensor.folderId = folderId;
+  }
   restartIfRunning(sensor, wasRunning);
   await saveState();
   res.json(sensor);
@@ -1617,6 +1880,7 @@ app.post("/api/sensors/:id/metrics", async (req, res) => {
     key: String(req.body.key || "metric"),
     value: String(req.body.value ?? "0"),
     unit: String(req.body.unit ?? ""),
+    topic: req.body.topic ? String(req.body.topic) : undefined,
     enabled: req.body.enabled !== false,
     mode: "manual",
     randomMin: "0",
@@ -1640,6 +1904,7 @@ app.patch("/api/sensors/:sensorId/metrics/:metricId", async (req, res) => {
   if (req.body.key !== undefined) metric.key = String(req.body.key);
   if (req.body.value !== undefined) metric.value = String(req.body.value);
   if (req.body.unit !== undefined) metric.unit = String(req.body.unit);
+  if (req.body.topic !== undefined) metric.topic = String(req.body.topic || "").trim() || undefined;
   if (req.body.enabled !== undefined) metric.enabled = Boolean(req.body.enabled);
 
   if (req.body.mode !== undefined) {
@@ -1695,6 +1960,7 @@ app.post("/api/scenarios", async (req, res) => {
     startedAt: null,
     pausedAt: null,
     elapsedBeforePause: 0,
+    folderId: validateFolderTarget("scenarios", req.body.folderId) ?? null,
     actions: []
   };
 
@@ -1744,6 +2010,9 @@ app.post("/api/scenarios/:id/copy", async (req, res) => {
 
     runtimeSnapshot:
       null,
+
+    folderId:
+      source.folderId ?? null,
 
     actions:
       (source.actions ?? []).map(
@@ -1801,6 +2070,12 @@ app.patch("/api/scenarios/:id", async (req, res) => {
       String(
         req.body.name
       );
+  }
+
+  if (req.body.folderId !== undefined) {
+    const folderId = validateFolderTarget("scenarios", req.body.folderId);
+    if (folderId === undefined) return res.status(400).json({ error: "Unknown folder" });
+    scenario.folderId = folderId;
   }
 
   if (

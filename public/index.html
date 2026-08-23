@@ -22,7 +22,7 @@
       id="buildVersion"
       class="build-version"
     >
-      SIM-019 - build 019
+      SIM-020 - build 020
     </span>
   </div>
 
@@ -57,33 +57,67 @@
   </nav>
 
   <section id="tab-basic" class="tab-panel">
-    <section class="toolbar">
-      <button class="primary" onclick="addSensor()">+ Add sensor</button>
-      <button class="btn-start" onclick="action('/api/start-all')">▶ Start all</button>
-      <button class="btn-stop" onclick="action('/api/stop-all')">■ Stop all</button>
-      <button class="btn-publish" onclick="action('/api/publish-all')">Publish all now</button>
-    </section>
-    <div id="sensors"></div>
+    <div class="library-layout">
+      <aside class="folder-sidebar">
+        <div class="folder-sidebar-head">
+          <div>
+            <strong>Basic injection</strong>
+            <small>Folders</small>
+          </div>
+          <button class="folder-add" onclick="createFolder('basic')" title="Create folder">+</button>
+        </div>
+        <div id="basicFolderTree" class="folder-tree"></div>
+      </aside>
+      <div class="library-content">
+        <section class="toolbar library-toolbar">
+          <button class="primary" onclick="addSensor()">+ Add sensor</button>
+          <button class="btn-start" onclick="action('/api/start-all')">▶ Start all</button>
+          <button class="btn-stop" onclick="action('/api/stop-all')">■ Stop all</button>
+          <button class="btn-publish" onclick="action('/api/publish-all')">Publish all now</button>
+          <span class="toolbar-spacer"></span>
+          <button onclick="exportLibrary('basic',false)">Export all</button>
+          <button onclick="exportLibrary('basic',true)">Export current</button>
+          <button onclick="document.getElementById('basicImportFile').click()">Import</button>
+          <input id="basicImportFile" class="hidden-file-input" type="file" accept="application/json,.json" onchange="importLibrary('basic',this)">
+        </section>
+        <div id="basicFolderContext" class="folder-context"></div>
+        <div id="sensors"></div>
+      </div>
+    </div>
   </section>
 
   <section id="tab-scenarios" class="tab-panel" hidden>
-  <section class="scenarios">
-    <div class="section-title">
-      <div>
-        <h2>Scenarios</h2>
-        <span>Automated sensor and metric changes</span>
+    <div class="library-layout">
+      <aside class="folder-sidebar">
+        <div class="folder-sidebar-head">
+          <div>
+            <strong>Scenarios</strong>
+            <small>Folders</small>
+          </div>
+          <button class="folder-add" onclick="createFolder('scenarios')" title="Create folder">+</button>
+        </div>
+        <div id="scenarioFolderTree" class="folder-tree"></div>
+      </aside>
+      <div class="library-content">
+        <section class="scenarios">
+          <div class="section-title">
+            <div>
+              <h2>Scenarios</h2>
+              <span>Automated sensor and metric changes</span>
+            </div>
+            <div class="section-actions">
+              <button onclick="exportLibrary('scenarios',false)">Export all</button>
+              <button onclick="exportLibrary('scenarios',true)">Export current</button>
+              <button onclick="document.getElementById('scenarioImportFile').click()">Import</button>
+              <input id="scenarioImportFile" class="hidden-file-input" type="file" accept="application/json,.json" onchange="importLibrary('scenarios',this)">
+              <button class="primary" onclick="addScenario()">+ Add scenario</button>
+            </div>
+          </div>
+          <div id="scenarioFolderContext" class="folder-context"></div>
+          <div id="scenarios"></div>
+        </section>
       </div>
-
-      <button
-        class="primary"
-        onclick="addScenario()"
-      >
-        + Add scenario
-      </button>
     </div>
-
-    <div id="scenarios"></div>
-  </section>
   </section>
 
   <section id="tab-logs" class="tab-panel" hidden>

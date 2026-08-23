@@ -3,6 +3,205 @@ let current;
 const MAIN_TAB_KEY =
   "sensorsphere.simulator.mainTab";
 
+const FOLDER_SELECTION_KEY =
+  "sensorsphere.simulator.folderSelection.v1";
+
+function loadFolderSelection() {
+  try {
+    return {
+      basic: "__all__",
+      scenarios: "__all__",
+      ...JSON.parse(localStorage.getItem(FOLDER_SELECTION_KEY) || "{}")
+    };
+  } catch {
+    return { basic: "__all__", scenarios: "__all__" };
+  }
+}
+
+const folderSelection = loadFolderSelection();
+
+function saveFolderSelection() {
+  try {
+    localStorage.setItem(FOLDER_SELECTION_KEY, JSON.stringify(folderSelection));
+  } catch {}
+}
+
+function foldersFor(kind) {
+  return current?.folders?.[kind] || [];
+}
+
+function itemsFor(kind) {
+  return kind === "basic" ? (current?.sensors || []) : (current?.scenarios || []);
+}
+
+function folderById(kind, id) {
+  return foldersFor(kind).find(folder => folder.id === id);
+}
+
+function folderChildren(kind, parentId) {
+  return foldersFor(kind)
+    .filter(folder => (folder.parentId || null) === (parentId || null))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function directFolderCount(kind, folderId) {
+  return itemsFor(kind).filter(item => (item.folderId || null) === (folderId || null)).length;
+}
+
+function visibleItems(kind) {
+  const selected = folderSelection[kind] || "__all__";
+  const items = itemsFor(kind);
+  if (selected === "__all__") return items;
+  if (selected === "__unfiled__") return items.filter(item => !item.folderId);
+  return items.filter(item => item.folderId === selected);
+}
+
+function folderOptionRows(kind, parentId = null, depth = 0, selectedId = null) {
+  return folderChildren(kind, parentId).map(folder => `
+    <option value="${esc(folder.id)}" ${folder.id === selectedId ? "selected" : ""}>
+      ${esc(`${"  ".repeat(depth)}${depth ? "↳ " : ""}${folder.name}`)}
+    </option>
+    ${folderOptionRows(kind, folder.id, depth + 1, selectedId)}
+  `).join("");
+}
+
+function folderSelectOptions(kind, selectedId) {
+  return `
+    <option value="" ${!selectedId ? "selected" : ""}>Unfiled</option>
+    ${folderOptionRows(kind, null, 0, selectedId)}
+  `;
+}
+
+function folderTreeRows(kind, parentId = null, depth = 0) {
+  return folderChildren(kind, parentId).map(folder => {
+    const selected = folderSelection[kind] === folder.id;
+    return `
+      <div class="folder-node" style="--folder-depth:${depth}">
+        <button class="folder-row ${selected ? "active" : ""}" onclick="selectFolder('${kind}','${folder.id}')">
+          <span class="folder-icon">▸</span>
+          <span class="folder-name">${esc(folder.name)}</span>
+          <span class="folder-count">${directFolderCount(kind, folder.id)}</span>
+        </button>
+        <div class="folder-node-actions">
+          <button onclick="event.stopPropagation();renameFolder('${kind}','${folder.id}')" title="Rename folder">✎</button>
+          <button onclick="event.stopPropagation();deleteFolder('${kind}','${folder.id}')" title="Delete folder">×</button>
+        </div>
+      </div>
+      ${folderTreeRows(kind, folder.id, depth + 1)}
+    `;
+  }).join("");
+}
+
+function renderFolderNavigation(kind) {
+  const targetId = kind === "basic" ? "basicFolderTree" : "scenarioFolderTree";
+  const contextId = kind === "basic" ? "basicFolderContext" : "scenarioFolderContext";
+  const target = document.getElementById(targetId);
+  const context = document.getElementById(contextId);
+  if (!target) return;
+
+  const selected = folderSelection[kind] || "__all__";
+  if (selected !== "__all__" && selected !== "__unfiled__" && !folderById(kind, selected)) {
+    folderSelection[kind] = "__all__";
+    saveFolderSelection();
+  }
+
+  target.innerHTML = `
+    <button class="folder-row ${folderSelection[kind] === "__all__" ? "active" : ""}" onclick="selectFolder('${kind}','__all__')">
+      <span class="folder-icon">◆</span><span class="folder-name">All</span><span class="folder-count">${itemsFor(kind).length}</span>
+    </button>
+    <button class="folder-row ${folderSelection[kind] === "__unfiled__" ? "active" : ""}" onclick="selectFolder('${kind}','__unfiled__')">
+      <span class="folder-icon">◇</span><span class="folder-name">Unfiled</span><span class="folder-count">${directFolderCount(kind, null)}</span>
+    </button>
+    ${folderTreeRows(kind)}
+  `;
+
+  if (context) {
+    const label = folderSelection[kind] === "__all__"
+      ? "All items"
+      : folderSelection[kind] === "__unfiled__"
+        ? "Unfiled"
+        : folderById(kind, folderSelection[kind])?.name || "All items";
+    context.innerHTML = `<strong>${esc(label)}</strong><span>${visibleItems(kind).length} item${visibleItems(kind).length === 1 ? "" : "s"}</span>`;
+  }
+}
+
+function selectFolder(kind, id) {
+  folderSelection[kind] = id;
+  saveFolderSelection();
+  renderFolderNavigation(kind);
+  if (kind === "basic") renderSensors(); else renderScenarios();
+}
+
+async function createFolder(kind) {
+  const parentId = folderSelection[kind] && !folderSelection[kind].startsWith("__") ? folderSelection[kind] : null;
+  const name = prompt("Folder name:");
+  if (!name?.trim()) return;
+  const folder = await api(`/api/folders/${kind}`, { method: "POST", body: JSON.stringify({ name: name.trim(), parentId }) });
+  folderSelection[kind] = folder.id;
+  saveFolderSelection();
+  await refresh();
+}
+
+async function renameFolder(kind, id) {
+  const folder = folderById(kind, id);
+  if (!folder) return;
+  const name = prompt("Rename folder:", folder.name);
+  if (!name?.trim() || name.trim() === folder.name) return;
+  await api(`/api/folders/${kind}/${id}`, { method: "PATCH", body: JSON.stringify({ name: name.trim() }) });
+  await refresh();
+}
+
+async function deleteFolder(kind, id) {
+  const folder = folderById(kind, id);
+  if (!folder) return;
+  if (!confirm(`Delete folder "${folder.name}"? Items and child folders will be moved to its parent; no injection/scenario will be deleted.`)) return;
+  await api(`/api/folders/${kind}/${id}`, { method: "DELETE" });
+  if (folderSelection[kind] === id) folderSelection[kind] = folder.parentId || "__unfiled__";
+  saveFolderSelection();
+  await refresh();
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportLibrary(kind, currentOnly) {
+  const selected = folderSelection[kind];
+  const useFolder = currentOnly && selected && !selected.startsWith("__");
+  if (currentOnly && !useFolder) {
+    alert("Select a real folder to export the current folder tree, or use Export all.");
+    return;
+  }
+  const query = useFolder ? `?folderId=${encodeURIComponent(selected)}` : "";
+  const data = await api(`/api/export/${kind}${query}`);
+  const suffix = useFolder ? (folderById(kind, selected)?.name || "folder") : "all";
+  downloadJson(`sensorsphere-simulator-${kind}-${suffix.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}.json`, data);
+}
+
+async function importLibrary(kind, input) {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  try {
+    const document = JSON.parse(await file.text());
+    const result = await api(`/api/import/${kind}`, { method: "POST", body: JSON.stringify(document) });
+    alert(`Imported ${result.items} item(s) and ${result.folders} folder(s).`);
+    folderSelection[kind] = "__all__";
+    saveFolderSelection();
+    await refresh();
+  } catch (error) {
+    alert(`Import failed: ${error.message}`);
+  }
+}
+
 function selectMainTab(tab) {
   const selected =
     ["basic", "scenarios", "logs"].includes(tab)
@@ -227,6 +426,8 @@ async function refresh() {
       );
 
     renderStatus();
+    renderFolderNavigation("basic");
+    renderFolderNavigation("scenarios");
 
     // Do not rebuild sensor forms while the user is typing.
     // Replacing the DOM would move focus/cursor and interrupt input.
@@ -285,7 +486,7 @@ function renderStatus() {
 }
 
 function renderSensors() {
-  document.getElementById("sensors").innerHTML = current.sensors.map(sensor => {
+  document.getElementById("sensors").innerHTML = visibleItems("basic").map(sensor => {
     const collapsed =
       isCollapsed(
         "sensors",
@@ -337,6 +538,7 @@ function renderSensors() {
       >
       <div class="config">
         <label>Name <input value="${esc(sensor.name)}" oninput="queueSensorPatch('${sensor.id}',{name:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"></label>
+        <label>Folder <select onchange="patchSensor('${sensor.id}',{folderId:this.value || null})">${folderSelectOptions("basic", sensor.folderId)}</select></label>
         <label>UID <input value="${esc(sensor.uid)}" oninput="queueSensorPatch('${sensor.id}',{uid:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"></label>
         <label class="topic-prefix-label">Topic prefix <input class="topic-prefix-input" value="${esc(sensor.topicPrefix || current.mqtt.topicPrefix || 'sensors/ble_gateway/sensor')}" oninput="queueSensorPatch('${sensor.id}',{topicPrefix:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')" placeholder="${esc(current.mqtt.topicPrefix || 'sensors/ble_gateway/sensor')}"></label>
         <label>Interval <input class="interval" type="number" min="1" value="${sensor.intervalSeconds}" oninput="queueSensorIntervalPatch('${sensor.id}',this.value)" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"> s</label>
@@ -389,6 +591,11 @@ function renderSensors() {
               </select>
               <button class="danger" onclick="deleteMetric('${sensor.id}','${metric.id}')">×</button>
             </div>
+            <div class="metric-topic-override">
+              <label>Topic override
+                <input value="${esc(metric.topic || "")}" onchange="patchMetric('${sensor.id}','${metric.id}',{topic:this.value})" placeholder="Optional exact MQTT topic">
+              </label>
+            </div>
 
             ${metric.mode==="random" ? `
               <div class="mode-config">
@@ -419,7 +626,7 @@ function renderSensors() {
                   </div>`).join("")}
               </div>` : ""}
 
-            <div class="topic" data-live-sensor-topic="${esc(sensor.id)}" data-metric-key="${esc(metric.key)}">${esc(`${sensor.topicPrefix || current.mqtt.topicPrefix || "sensors/ble_gateway/sensor"}/${metric.key}_${sensor.uid}/state`)}</div>
+            <div class="topic" data-live-sensor-topic="${esc(sensor.id)}" data-metric-key="${esc(metric.key)}" data-explicit-topic="${esc(metric.topic || "")}">${esc(metric.topic || `${sensor.topicPrefix || current.mqtt.topicPrefix || "sensors/ble_gateway/sensor"}/${metric.key}_${sensor.uid}/state`)}</div>
           </div>`;
             })()
           }
@@ -565,10 +772,7 @@ function renderScenarios() {
     return;
   }
 
-  if (
-    !current.scenarios ||
-    current.scenarios.length === 0
-  ) {
+  if (visibleItems("scenarios").length === 0) {
     target.innerHTML =
       `<div class="empty-state">
         No scenarios yet. Create one to automate alert and recovery tests.
@@ -577,7 +781,7 @@ function renderScenarios() {
   }
 
   target.innerHTML =
-    current.scenarios.map(
+    visibleItems("scenarios").map(
       scenario => {
 
         const elapsed =
@@ -630,6 +834,12 @@ function renderScenarios() {
                 >
 
               </div>
+
+              <label class="scenario-folder-select">Folder
+                <select ${locked ? "disabled" : ""} onchange="patchScenario('${scenario.id}',{folderId:this.value || null})">
+                  ${folderSelectOptions("scenarios", scenario.folderId)}
+                </select>
+              </label>
 
               ${collapseButton(
                 "scenarios",
@@ -1121,6 +1331,12 @@ function updateSensorLiveUi(
         return;
       }
 
+      const explicitTopic = element.dataset.explicitTopic || "";
+      if (explicitTopic) {
+        element.textContent = explicitTopic;
+        return;
+      }
+
       const metricKey =
         element.dataset.metricKey ||
         "";
@@ -1242,7 +1458,7 @@ async function patchMetric(sid, mid, body){ await api(`/api/sensors/${sid}/metri
 
 async function addSensor(){
   const n = current.sensors.length + 1;
-  await api("/api/sensors",{method:"POST",body:JSON.stringify({name:`Test Sensor ${String(n).padStart(2,"0")}`,uid:`test_${String(n).padStart(2,"0")}`,intervalSeconds:15})});
+  await api("/api/sensors",{method:"POST",body:JSON.stringify({name:`Test Sensor ${String(n).padStart(2,"0")}`,uid:`test_${String(n).padStart(2,"0")}`,intervalSeconds:15,folderId:folderSelection.basic && !folderSelection.basic.startsWith("__") ? folderSelection.basic : null})});
   await refresh();
 }
 async function copySensor(id){
@@ -1473,7 +1689,8 @@ async function addScenario(){
       method:"POST",
       body:JSON.stringify({
         name:`Scenario ${(current.scenarios?.length || 0) + 1}`,
-        description:""
+        description:"",
+        folderId:folderSelection.scenarios && !folderSelection.scenarios.startsWith("__") ? folderSelection.scenarios : null
       })
     }
   );

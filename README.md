@@ -311,3 +311,54 @@ This applies to backend/container restarts as long as the simulator data volume 
 Basic Injection and Scenario cards can be collapsed independently. The card header
 and runtime/action controls remain visible while details are hidden. Collapse state
 is persisted per browser in localStorage and restored after refresh.
+
+## SIM-020 folders and portable libraries
+
+SIM-020 adds organization and portability for both Basic injections and Scenarios.
+
+Each tab has an independent folder tree with:
+
+- nested folders
+- create / rename / delete
+- direct item counts
+- `All` and `Unfiled` views
+- per-item folder assignment
+
+Deleting a folder never deletes Basic injections or Scenarios. Direct items and child
+folders are moved to the deleted folder's parent (or to `Unfiled` at the root).
+
+Basic injections and Scenarios can be exported/imported as versioned JSON documents:
+
+```json
+{
+  "format": "sensorsphere-simulator",
+  "version": 1,
+  "type": "basic-injections",
+  "folders": [],
+  "items": []
+}
+```
+
+Imports always create new internal UUIDs so they do not overwrite existing content.
+Imported Basic injections are STOPPED and imported Scenarios are reset to STOPPED.
+
+A Basic injection metric can also define an optional exact MQTT `topic`. When present,
+it overrides the generated `<topicPrefix>/<metric>_<uid>/state` topic. This is useful
+for gateway metadata topics that do not include a sensor UID.
+
+The example file:
+
+```text
+examples/basic-injections-ble-gateway-t1-t2.json
+```
+
+contains two gateways:
+
+- `BLE Gateway MQTT T1` / `ble-gateway-t1`
+- `BLE Gateway MQTT T2` / `ble-gateway-t2`
+
+Both publish gateway metadata with WiFi SSID `WifiTest` and observe the same three BLE
+sensor UIDs. Their RSSI values are deliberately different so Gateway Coverage can
+produce different gateway recommendations. Start the imported injections and allow
+roughly 80 seconds at the configured 10-second interval to exceed an 8-sample
+recommendation minimum.

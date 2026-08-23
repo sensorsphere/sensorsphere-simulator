@@ -648,3 +648,105 @@ button:active{
 }
 
 .config .topic-prefix-input{width:280px;max-width:100%}
+
+/* SIM-020 library folders + import/export */
+.library-layout{
+  display:grid;
+  grid-template-columns:240px minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+}
+.library-content{min-width:0}
+.folder-sidebar{
+  position:sticky;
+  top:96px;
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:11px;
+  overflow:hidden;
+  box-shadow:0 8px 24px #3341550b;
+}
+.folder-sidebar-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:12px;
+  border-bottom:1px solid var(--border);
+  background:#f8fafc;
+}
+.folder-sidebar-head div{display:flex;flex-direction:column;gap:2px}
+.folder-sidebar-head small{color:var(--muted);font-size:11px}
+.folder-add{padding:4px 9px;font-size:18px;line-height:1}
+.folder-tree{padding:8px}
+.folder-node{position:relative;padding-left:calc(var(--folder-depth) * 14px)}
+.folder-row{
+  width:100%;
+  display:grid;
+  grid-template-columns:16px minmax(0,1fr) auto;
+  gap:6px;
+  align-items:center;
+  text-align:left;
+  padding:7px 8px;
+  border:0;
+  background:transparent;
+  font-weight:600;
+}
+.folder-row:hover{background:#f1f5f9}
+.folder-row.active{background:#eef2ff;color:#3730a3}
+.folder-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-icon{color:#64748b;font-size:10px}
+.folder-count{
+  min-width:22px;
+  padding:2px 6px;
+  border-radius:999px;
+  background:#e2e8f0;
+  color:#475569;
+  text-align:center;
+  font-size:10px;
+  font-weight:800;
+}
+.folder-row.active .folder-count{background:#c7d2fe;color:#3730a3}
+.folder-node-actions{
+  display:none;
+  position:absolute;
+  right:6px;
+  top:4px;
+  gap:2px;
+  background:#fff;
+  border-radius:6px;
+  box-shadow:0 2px 8px #0f172a18;
+}
+.folder-node:hover>.folder-node-actions{display:flex}
+.folder-node-actions button{padding:3px 6px;border:0;font-size:11px}
+.folder-node:hover>.folder-row .folder-count{visibility:hidden}
+.folder-context{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:-8px 0 12px;
+  color:#475569;
+  font-size:12px;
+}
+.folder-context span{color:#64748b}
+.library-toolbar{align-items:center}
+.toolbar-spacer{flex:1}
+.hidden-file-input{display:none}
+.section-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.config label,.scenario-folder-select,.metric-topic-override label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:12px;
+  color:#475569;
+}
+.config select{min-width:150px}
+.scenario-folder-select select{min-width:160px}
+.metric-topic-override{margin:8px 0 0 42px}
+.metric-topic-override input{width:min(760px,100%);font-family:monospace;font-size:12px}
+@media(max-width:900px){
+  .library-layout{grid-template-columns:1fr}
+  .folder-sidebar{position:static}
+  .folder-tree{max-height:220px;overflow:auto}
+  .metric-topic-override{margin-left:0}
+}
