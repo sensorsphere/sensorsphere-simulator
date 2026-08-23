@@ -235,7 +235,7 @@ function folderTreeRows(kind, parentId = null, depth = 0) {
         <div class="folder-node-actions">
           <button onclick="event.stopPropagation();moveFolderPrompt('${kind}','${folder.id}')" title="Move folder">⇄</button>
           <button onclick="event.stopPropagation();renameFolder('${kind}','${folder.id}')" title="Rename folder">✎</button>
-          <button onclick="event.stopPropagation();deleteFolder('${kind}','${folder.id}')" title="Delete folder">×</button>
+          <button class="folder-delete-action" onclick="event.stopPropagation();deleteFolder('${kind}','${folder.id}')" title="Delete folder" aria-label="Delete folder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button>
         </div>
       </div>
       ${collapsed ? "" : folderTreeRows(kind, folder.id, depth + 1)}
@@ -911,6 +911,18 @@ function renderRuntimeStats() {
   document.getElementById("mqttRuntimeStat")?.classList.toggle("is-active", published > 0);
 }
 
+function formatBuildDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "unknown");
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
 function renderStatus() {
   const buildVersion =
     document.getElementById(
@@ -924,6 +936,13 @@ function renderStatus() {
     buildVersion.textContent =
       `${current.application.version} · build ${current.application.build}`;
   }
+
+  document.querySelectorAll("[data-build-date]").forEach(element => {
+    const builtAt = current.application?.builtAt;
+    element.textContent = builtAt
+      ? formatBuildDate(builtAt)
+      : "unknown";
+  });
 
   const mqtt =
     document.getElementById(

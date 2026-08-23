@@ -24,6 +24,8 @@ const BUILD_NUMBER =
   process.env.SIMULATOR_BUILD
   ?? "020";
 
+let BUILT_AT = process.env.SIMULATOR_BUILT_AT ?? null;
+
 const defaultState = {
   sensors: [{
     id: crypto.randomUUID(),
@@ -48,6 +50,15 @@ const defaultState = {
 let state;
 const timers = new Map();
 const scenarioTimers = new Map();
+
+async function loadBuildInfo() {
+  if (BUILT_AT) return;
+  try {
+    BUILT_AT = (await fs.readFile("/app/build-date.txt", "utf8")).trim();
+  } catch {
+    BUILT_AT = null;
+  }
+}
 
 async function loadState() {
   try {
@@ -350,7 +361,8 @@ function publicState() {
   return {
     application: {
       version: APP_VERSION,
-      build: BUILD_NUMBER
+      build: BUILD_NUMBER,
+      builtAt: BUILT_AT
     },
 
     mqtt: {
@@ -1574,6 +1586,7 @@ client.on("connect", () => addLog({ status: "INFO", message: `MQTT connected: ${
 client.on("reconnect", () => addLog({ status: "INFO", message: "MQTT reconnecting" }));
 client.on("error", error => addLog({ status: "ERROR", message: `MQTT: ${error.message}` }));
 
+await loadBuildInfo();
 await loadState();
 
 // Restore Basic Injection timers from the persisted sensor state.
