@@ -26,8 +26,18 @@
     </span>
   </div>
 
-  <div id="mqtt" class="status">
-    MQTT …
+  <div class="header-actions">
+    <label class="theme-picker" title="Interface theme">
+      <span>Theme</span>
+      <select id="themeSelect" onchange="setTheme(this.value)">
+        <option value="synthwave">SynthWave</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </label>
+    <div id="mqtt" class="status">
+      MQTT …
+    </div>
   </div>
 </header>
 <main>

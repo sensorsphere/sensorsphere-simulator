@@ -6,6 +6,36 @@ const MAIN_TAB_KEY =
 const FOLDER_SELECTION_KEY =
   "sensorsphere.simulator.folderSelection.v1";
 
+const THEME_STORAGE_KEY =
+  "sensorsphere.simulator.theme.v1";
+
+function applyTheme(theme) {
+  const selected = ["synthwave", "dark", "light"].includes(theme)
+    ? theme
+    : "synthwave";
+  document.documentElement.dataset.theme = selected;
+  const select = document.getElementById("themeSelect");
+  if (select && select.value !== selected) select.value = selected;
+  return selected;
+}
+
+function setTheme(theme) {
+  const selected = applyTheme(theme);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, selected);
+  } catch {}
+}
+
+function restoreTheme() {
+  let selected = "synthwave";
+  try {
+    selected = localStorage.getItem(THEME_STORAGE_KEY) || "synthwave";
+  } catch {}
+  applyTheme(selected);
+}
+
+restoreTheme();
+
 function loadFolderSelection() {
   try {
     return {
@@ -77,12 +107,24 @@ function folderTreeRows(kind, parentId = null, depth = 0) {
     const selected = folderSelection[kind] === folder.id;
     return `
       <div class="folder-node" style="--folder-depth:${depth}">
-        <button class="folder-row ${selected ? "active" : ""}" onclick="selectFolder('${kind}','${folder.id}')">
+        <button
+          class="folder-row ${selected ? "active" : ""}"
+          draggable="true"
+          data-folder-kind="${kind}"
+          data-folder-id="${folder.id}"
+          onclick="selectFolder('${kind}','${folder.id}')"
+          ondragstart="folderDragStart(event,'${kind}','${folder.id}')"
+          ondragend="folderDragEnd(event)"
+          ondragover="folderDragOver(event,'${kind}','${folder.id}')"
+          ondragleave="folderDragLeave(event)"
+          ondrop="folderDrop(event,'${kind}','${folder.id}')"
+        >
           <span class="folder-icon">▸</span>
           <span class="folder-name">${esc(folder.name)}</span>
           <span class="folder-count">${directFolderCount(kind, folder.id)}</span>
         </button>
         <div class="folder-node-actions">
+          <button onclick="event.stopPropagation();moveFolderPrompt('${kind}','${folder.id}')" title="Move folder">⇄</button>
           <button onclick="event.stopPropagation();renameFolder('${kind}','${folder.id}')" title="Rename folder">✎</button>
           <button onclick="event.stopPropagation();deleteFolder('${kind}','${folder.id}')" title="Delete folder">×</button>
         </div>
@@ -90,6 +132,155 @@ function folderTreeRows(kind, parentId = null, depth = 0) {
       ${folderTreeRows(kind, folder.id, depth + 1)}
     `;
   }).join("");
+}
+
+function folderDragStart(event, kind, id) {
+  event.stopPropagation();
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", JSON.stringify({ kind, id }));
+  event.currentTarget.classList.add("is-dragging");
+}
+
+function folderDragEnd(event) {
+  event.currentTarget.classList.remove("is-dragging");
+  document.querySelectorAll(".folder-row.drop-target").forEach(row => row.classList.remove("drop-target"));
+}
+
+function folderDragOver(event, kind, targetId) {
+  const raw = event.dataTransfer.getData("text/plain");
+  if (!raw) return;
+  try {
+    const dragged = JSON.parse(raw);
+    if (dragged.kind !== kind || dragged.id === targetId) return;
+  } catch {
+    return;
+  }
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  event.currentTarget.classList.add("drop-target");
+}
+
+function folderDragLeave(event) {
+  event.currentTarget.classList.remove("drop-target");
+}
+
+async function folderDrop(event, kind, targetId) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget.classList.remove("drop-target");
+  let dragged;
+  try {
+    dragged = JSON.parse(event.dataTransfer.getData("text/plain"));
+  } catch {
+    return;
+  }
+  if (!dragged || dragged.kind !== kind || dragged.id === targetId) return;
+  try {
+    await moveFolder(kind, dragged.id, targetId);
+  } catch (error) {
+    alert(`Move failed: ${error.message}`);
+  }
+}
+
+async function folderDropToRoot(event, kind) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget.classList.remove("drop-target");
+  let dragged;
+  try {
+    dragged = JSON.parse(event.dataTransfer.getData("text/plain"));
+  } catch {
+    return;
+  }
+  if (!dragged || dragged.kind !== kind) return;
+  try {
+    await moveFolder(kind, dragged.id, null);
+  } catch (error) {
+    alert(`Move failed: ${error.message}`);
+  }
+}
+
+async function moveFolder(kind, id, parentId) {
+  const folder = folderById(kind, id);
+  if (!folder) return;
+  if ((folder.parentId || null) === (parentId || null)) return;
+  await api(`/api/folders/${kind}/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ parentId })
+  });
+  await refresh();
+}
+
+function folderMoveChoices(kind, movingId, parentId = null, depth = 0) {
+  return folderChildren(kind, parentId)
+    .filter(folder => folder.id !== movingId)
+    .flatMap(folder => {
+      const descendants = new Set();
+      const collect = id => {
+        for (const child of folderChildren(kind, id)) {
+          descendants.add(child.id);
+          collect(child.id);
+        }
+      };
+      collect(movingId);
+      if (descendants.has(folder.id)) return [];
+      return [
+        { id: folder.id, label: `${"  ".repeat(depth)}${depth ? "↳ " : ""}${folder.name}` },
+        ...folderMoveChoices(kind, movingId, folder.id, depth + 1)
+      ];
+    });
+}
+
+function moveFolderPrompt(kind, id) {
+  const folder = folderById(kind, id);
+  if (!folder) return;
+  const descendants = new Set();
+  const collect = parent => {
+    for (const child of folderChildren(kind, parent)) {
+      descendants.add(child.id);
+      collect(child.id);
+    }
+  };
+  collect(id);
+  const choices = [{ id: "", label: "Root" }];
+  const walk = (parentId = null, depth = 0) => {
+    for (const candidate of folderChildren(kind, parentId)) {
+      if (candidate.id === id || descendants.has(candidate.id)) continue;
+      choices.push({ id: candidate.id, label: `${"  ".repeat(depth)}${depth ? "↳ " : ""}${candidate.name}` });
+      walk(candidate.id, depth + 1);
+    }
+  };
+  walk();
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="move-folder-dialog" role="dialog" aria-modal="true" aria-label="Move folder">
+      <h3>Move folder</h3>
+      <p>Move <strong>${esc(folder.name)}</strong> into:</p>
+      <select class="move-folder-select">
+        ${choices.map(choice => `<option value="${esc(choice.id)}" ${(folder.parentId || "") === choice.id ? "selected" : ""}>${esc(choice.label)}</option>`).join("")}
+      </select>
+      <div class="move-folder-actions">
+        <button type="button" data-action="cancel">Cancel</button>
+        <button type="button" class="primary" data-action="move">Move</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", event => {
+    if (event.target === overlay || event.target.dataset.action === "cancel") close();
+  });
+  overlay.querySelector('[data-action="move"]').addEventListener("click", async () => {
+    const parentId = overlay.querySelector(".move-folder-select").value || null;
+    try {
+      await moveFolder(kind, id, parentId);
+      close();
+    } catch (error) {
+      alert(`Move failed: ${error.message}`);
+    }
+  });
 }
 
 function renderFolderNavigation(kind) {
@@ -106,7 +297,7 @@ function renderFolderNavigation(kind) {
   }
 
   target.innerHTML = `
-    <button class="folder-row ${folderSelection[kind] === "__all__" ? "active" : ""}" onclick="selectFolder('${kind}','__all__')">
+    <button class="folder-row folder-root-drop ${folderSelection[kind] === "__all__" ? "active" : ""}" onclick="selectFolder('${kind}','__all__')" ondragover="event.preventDefault();this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')" ondrop="folderDropToRoot(event,'${kind}')">
       <span class="folder-icon">◆</span><span class="folder-name">All</span><span class="folder-count">${itemsFor(kind).length}</span>
     </button>
     <button class="folder-row ${folderSelection[kind] === "__unfiled__" ? "active" : ""}" onclick="selectFolder('${kind}','__unfiled__')">
