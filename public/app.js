@@ -671,6 +671,7 @@ async function refresh() {
       );
 
     renderStatus();
+    renderRuntimeStats();
     renderFolderNavigation("basic");
     renderFolderNavigation("scenarios");
 
@@ -696,6 +697,40 @@ async function refresh() {
     mqtt.textContent =
       "API disconnected";
   }
+}
+
+function renderRuntimeStats() {
+  if (!current) return;
+
+  const sensors = current.sensors || [];
+  const scenarios = current.scenarios || [];
+  const basicRunning = sensors.filter(sensor => Boolean(sensor.enabled)).length;
+  const scenarioRunning = scenarios.filter(scenario => scenario.status === "RUNNING").length;
+  const scenarioPaused = scenarios.filter(scenario => scenario.status === "PAUSED").length;
+  const scenarioActive = scenarioRunning + scenarioPaused;
+  const published = Number(current.runtimeStats?.mqttPublished || 0);
+
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+
+  setText("basicRuntimeValue", `${basicRunning} / ${sensors.length}`);
+  setText("basicRuntimeDetail", `${basicRunning} running`);
+  setText("scenarioRuntimeValue", `${scenarioActive} / ${scenarios.length}`);
+  setText(
+    "scenarioRuntimeDetail",
+    scenarioPaused > 0
+      ? `${scenarioRunning} running · ${scenarioPaused} paused`
+      : `${scenarioRunning} running`
+  );
+  setText("mqttRuntimeValue", published.toLocaleString());
+  setText("mqttRuntimeDetail", "since service start");
+
+  document.getElementById("basicRuntimeStat")?.classList.toggle("is-active", basicRunning > 0);
+  document.getElementById("scenarioRuntimeStat")?.classList.toggle("is-active", scenarioActive > 0);
+  document.getElementById("scenarioRuntimeStat")?.classList.toggle("has-paused", scenarioPaused > 0);
+  document.getElementById("mqttRuntimeStat")?.classList.toggle("is-active", published > 0);
 }
 
 function renderStatus() {

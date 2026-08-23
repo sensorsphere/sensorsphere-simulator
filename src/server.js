@@ -11,6 +11,11 @@ const MQTT_URL = process.env.MQTT_URL ??
 const TOPIC_PREFIX = process.env.MQTT_TOPIC_PREFIX ?? "sensors/ble_gateway/sensor";
 const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
 
+const runtimeStats = {
+  startedAt: new Date().toISOString(),
+  mqttPublished: 0
+};
+
 const APP_VERSION =
   process.env.SIMULATOR_VERSION
   ?? "SIM-020";
@@ -322,6 +327,8 @@ function publicState() {
       topicPrefix: TOPIC_PREFIX
     },
 
+    runtimeStats,
+
     sensors: state.sensors,
     folders: state.folders,
 
@@ -584,6 +591,8 @@ async function publishMetric(
       generated,
       { retain: false }
     );
+
+    runtimeStats.mqttPublished += 1;
 
     addLog({
       sensor: sensor.name,

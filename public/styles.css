@@ -1024,3 +1024,66 @@ input:focus,select:focus,textarea:focus{
   transition:opacity .16s ease,transform .16s ease;
 }
 .clipboard-toast.visible{opacity:1;transform:translateY(0)}
+
+
+/* SIM-023 / PR-073 compact runtime statistics */
+.runtime-stats{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:0 0 14px;
+}
+.runtime-stat-card{
+  min-width:150px;
+  padding:9px 12px;
+  display:grid;
+  grid-template-columns:1fr auto;
+  grid-template-areas:
+    "label value"
+    "detail value";
+  column-gap:12px;
+  align-items:center;
+  border:1px solid var(--border);
+  border-radius:10px;
+  color:var(--text);
+  background:linear-gradient(145deg,color-mix(in srgb,var(--surface) 92%,var(--brand) 8%),var(--surface));
+  box-shadow:0 7px 20px color-mix(in srgb,#000 14%,transparent);
+}
+.runtime-stat-label{
+  grid-area:label;
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.runtime-stat-value{
+  grid-area:value;
+  font-size:20px;
+  line-height:1;
+  letter-spacing:-.04em;
+  white-space:nowrap;
+}
+.runtime-stat-detail{
+  grid-area:detail;
+  margin-top:2px;
+  font-size:10px;
+  color:var(--muted);
+  white-space:nowrap;
+}
+.runtime-stat-card.is-active{
+  border-color:color-mix(in srgb,var(--cyan) 58%,var(--border));
+  box-shadow:0 7px 20px color-mix(in srgb,#000 14%,transparent),0 0 12px color-mix(in srgb,var(--cyan) 14%,transparent);
+}
+.runtime-stat-card.is-active .runtime-stat-value{color:var(--cyan)}
+.runtime-stat-card.has-paused{border-color:color-mix(in srgb,var(--warning) 56%,var(--border))}
+.runtime-stat-card.has-paused .runtime-stat-detail{color:var(--warning)}
+.runtime-stat-published.is-active .runtime-stat-value{color:var(--blue)}
+:root[data-theme="synthwave"] .runtime-stat-card.is-active{
+  box-shadow:0 7px 20px #0006,0 0 14px color-mix(in srgb,var(--cyan) 18%,transparent);
+}
+@media(max-width:700px){
+  .runtime-stats{justify-content:stretch}
+  .runtime-stat-card{flex:1 1 145px;min-width:0}
+}

@@ -43,6 +43,24 @@
 </header>
 <main>
 
+  <section class="runtime-stats" aria-label="Simulator runtime statistics">
+    <article class="runtime-stat-card" id="basicRuntimeStat">
+      <span class="runtime-stat-label">Basic injections</span>
+      <strong class="runtime-stat-value" id="basicRuntimeValue">0 / 0</strong>
+      <span class="runtime-stat-detail" id="basicRuntimeDetail">0 running</span>
+    </article>
+    <article class="runtime-stat-card" id="scenarioRuntimeStat">
+      <span class="runtime-stat-label">Scenarios</span>
+      <strong class="runtime-stat-value" id="scenarioRuntimeValue">0 / 0</strong>
+      <span class="runtime-stat-detail" id="scenarioRuntimeDetail">0 running</span>
+    </article>
+    <article class="runtime-stat-card runtime-stat-published" id="mqttRuntimeStat">
+      <span class="runtime-stat-label">MQTT published</span>
+      <strong class="runtime-stat-value" id="mqttRuntimeValue">0</strong>
+      <span class="runtime-stat-detail" id="mqttRuntimeDetail">since service start</span>
+    </article>
+  </section>
+
   <nav class="main-tabs">
     <button class="main-tab active" data-tab="basic" onclick="selectMainTab('basic')">
       <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
