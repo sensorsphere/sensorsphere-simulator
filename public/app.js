@@ -65,6 +65,41 @@ function loadFolderSelection() {
 
 const folderSelection = loadFolderSelection();
 
+const FOLDER_COLLAPSE_KEY =
+  "sensorsphere.simulator.folderCollapse.v1";
+
+function loadFolderCollapse() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FOLDER_COLLAPSE_KEY) || "{}");
+    return {
+      basic: new Set(Array.isArray(parsed.basic) ? parsed.basic : []),
+      scenarios: new Set(Array.isArray(parsed.scenarios) ? parsed.scenarios : [])
+    };
+  } catch {
+    return { basic: new Set(), scenarios: new Set() };
+  }
+}
+
+const folderCollapse = loadFolderCollapse();
+
+function saveFolderCollapse() {
+  try {
+    localStorage.setItem(FOLDER_COLLAPSE_KEY, JSON.stringify({
+      basic: [...folderCollapse.basic],
+      scenarios: [...folderCollapse.scenarios]
+    }));
+  } catch {}
+}
+
+function toggleFolderCollapsed(event, kind, id) {
+  event.stopPropagation();
+  const collapsed = folderCollapse[kind];
+  if (collapsed.has(id)) collapsed.delete(id);
+  else collapsed.add(id);
+  saveFolderCollapse();
+  renderFolderNavigation(kind);
+}
+
 function saveFolderSelection() {
   try {
     localStorage.setItem(FOLDER_SELECTION_KEY, JSON.stringify(folderSelection));
@@ -120,6 +155,9 @@ function folderSelectOptions(kind, selectedId) {
 function folderTreeRows(kind, parentId = null, depth = 0) {
   return folderChildren(kind, parentId).map(folder => {
     const selected = folderSelection[kind] === folder.id;
+    const children = folderChildren(kind, folder.id);
+    const hasChildren = children.length > 0;
+    const collapsed = folderCollapse[kind].has(folder.id);
     return `
       <div class="folder-node" style="--folder-depth:${depth}">
         <button
@@ -134,7 +172,10 @@ function folderTreeRows(kind, parentId = null, depth = 0) {
           ondragleave="folderDragLeave(event)"
           ondrop="folderDrop(event,'${kind}','${folder.id}')"
         >
-          <span class="folder-icon">▸</span>
+          <span
+            class="folder-icon ${hasChildren ? "is-toggle" : ""}"
+            ${hasChildren ? `onclick="toggleFolderCollapsed(event,'${kind}','${folder.id}')" title="${collapsed ? "Expand folder" : "Collapse folder"}"` : ""}
+          >${hasChildren ? (collapsed ? "▸" : "▾") : "·"}</span>
           <span class="folder-name">${esc(folder.name)}</span>
           <span class="folder-count">${directFolderCount(kind, folder.id)}</span>
         </button>
@@ -144,7 +185,7 @@ function folderTreeRows(kind, parentId = null, depth = 0) {
           <button onclick="event.stopPropagation();deleteFolder('${kind}','${folder.id}')" title="Delete folder">×</button>
         </div>
       </div>
-      ${folderTreeRows(kind, folder.id, depth + 1)}
+      ${collapsed ? "" : folderTreeRows(kind, folder.id, depth + 1)}
     `;
   }).join("");
 }
@@ -586,9 +627,7 @@ function collapseButton(
       title="${collapsed ? "Expand" : "Collapse"}"
       aria-label="${collapsed ? "Expand" : "Collapse"}"
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="${collapsed ? "m9 18 6-6-6-6" : "m6 9 6 6 6-6"}"/>
-      </svg>
+      <span class="collapse-chevron" aria-hidden="true">${collapsed ? "▸" : "▾"}</span>
     </button>
   `;
 }
@@ -691,6 +730,86 @@ function renderStatus() {
       : "● MQTT disconnected";
 }
 
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'"'"'`)}'`;
+}
+
+async function writeClipboard(text, message = "Copied to clipboard") {
+  let copied = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch {}
+
+  if (!copied) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      area.remove();
+    }
+  }
+
+  if (!copied) {
+    alert("Unable to copy automatically. Please copy the value manually.");
+    return;
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "clipboard-toast";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  window.setTimeout(() => toast.classList.add("visible"), 10);
+  window.setTimeout(() => {
+    toast.classList.remove("visible");
+    window.setTimeout(() => toast.remove(), 180);
+  }, 1500);
+}
+
+function copyBasicInjectionName(id) {
+  const sensor = current?.sensors?.find(sensor => sensor.id === id);
+  if (!sensor) return;
+  writeClipboard(sensor.name, "Basic Injection name copied");
+}
+
+function sensorMetricTopic(sensor, metric) {
+  const explicit = String(metric.topic || "").trim().replace(/^\/+|\/+$/g, "");
+  if (explicit) return explicit;
+  const prefix = String(sensor.topicPrefix || current?.mqtt?.topicPrefix || "sensors/ble_gateway/sensor")
+    .trim()
+    .replace(/^\/+|\/+$/g, "");
+  return `${prefix}/${metric.key}_${sensor.uid}/state`;
+}
+
+function copyMosquittoSubscribe(id) {
+  const sensor = current?.sensors?.find(sensor => sensor.id === id);
+  if (!sensor) return;
+
+  const topics = [...new Set(
+    (sensor.metrics || [])
+      .filter(metric => metric.enabled !== false)
+      .map(metric => sensorMetricTopic(sensor, metric))
+      .filter(Boolean)
+  )];
+
+  if (topics.length === 0) {
+    alert("This Basic Injection has no enabled MQTT metric to monitor.");
+    return;
+  }
+
+  const topicArgs = topics.map(topic => `-t ${shellQuote(topic)}`).join(" ");
+  const command = `docker compose exec mosquitto mosquitto_sub -h localhost -v ${topicArgs}`;
+  writeClipboard(command, "mosquitto_sub command copied");
+}
+
 function renderSensors() {
   document.getElementById("sensors").innerHTML = visibleItems("basic").map(sensor => {
     const collapsed =
@@ -703,7 +822,11 @@ function renderSensors() {
     <section class="sensor ${collapsed ? "is-collapsed" : ""}">
       <div class="sensor-head">
         <div class="grow">
-          <h2 data-live-sensor-name="${esc(sensor.id)}">${esc(sensor.name)}</h2>
+          <div class="sensor-title-row">
+            <h2 data-live-sensor-name="${esc(sensor.id)}">${esc(sensor.name)}</h2>
+            <button class="icon-action" type="button" onclick="copyBasicInjectionName('${sensor.id}')" title="Copy Basic Injection name" aria-label="Copy Basic Injection name">⧉</button>
+            <button class="icon-action terminal-action" type="button" onclick="copyMosquittoSubscribe('${sensor.id}')" title="Copy mosquitto_sub command" aria-label="Copy mosquitto_sub command">&gt;_</button>
+          </div>
           <small>
             UID: <span data-live-sensor-uid="${esc(sensor.id)}">${esc(sensor.uid)}</span> ·
             <span class="sensor-status ${sensor.enabled?"running":"stopped"}">
@@ -747,7 +870,7 @@ function renderSensors() {
         <label>Folder <select onchange="patchSensor('${sensor.id}',{folderId:this.value || null})">${folderSelectOptions("basic", sensor.folderId)}</select></label>
         <label>UID <input value="${esc(sensor.uid)}" oninput="queueSensorPatch('${sensor.id}',{uid:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"></label>
         <label class="topic-prefix-label">Topic prefix <input class="topic-prefix-input" value="${esc(sensor.topicPrefix || current.mqtt.topicPrefix || 'sensors/ble_gateway/sensor')}" oninput="queueSensorPatch('${sensor.id}',{topicPrefix:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')" placeholder="${esc(current.mqtt.topicPrefix || 'sensors/ble_gateway/sensor')}"></label>
-        <label>Interval <input class="interval" type="number" min="1" value="${sensor.intervalSeconds}" oninput="queueSensorIntervalPatch('${sensor.id}',this.value)" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"> s</label>
+        <label>Interval (s) <input class="interval" type="number" min="1" value="${sensor.intervalSeconds}" oninput="queueSensorIntervalPatch('${sensor.id}',this.value)" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"></label>
       </div>
       <div class="metrics">
         ${sensor.metrics.map(metric => `

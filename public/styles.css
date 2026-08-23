@@ -2,7 +2,7 @@
 
 .metric-card{padding:10px 0;border-bottom:1px solid #f0f0f0}
 .metric-card:last-child{border-bottom:0}
-.metric-main{display:grid;grid-template-columns:42px minmax(120px,1fr) minmax(90px,140px) 80px 110px 42px;gap:8px;align-items:center}
+.metric-main{display:grid;grid-template-columns:42px minmax(95px,160px) minmax(150px,1.35fr) 80px 110px 42px;gap:8px;align-items:center}
 .metric-main input,.metric-main select{width:100%}
 select{border:1px solid #d1d5db;border-radius:6px;padding:7px 8px;background:white}
 .mode-config{margin:9px 0 3px 42px;padding:10px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:7px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -962,3 +962,65 @@ input:focus,select:focus,textarea:focus{
   .theme-picker select{min-width:96px}
   .library-layout{grid-template-columns:1fr}
 }
+
+
+/* SIM-022 / PR-071 clipboard monitor actions + explicit collapse states */
+.sensor-title-row{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+}
+.sensor-title-row h2{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.icon-action{
+  width:27px;
+  height:27px;
+  padding:0;
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:6px;
+  font-size:14px;
+  line-height:1;
+}
+.terminal-action{
+  width:31px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11px;
+  font-weight:800;
+}
+.collapse-chevron{
+  display:block;
+  font-size:16px;
+  line-height:1;
+  transform:translateY(-1px);
+}
+.folder-icon.is-toggle{
+  cursor:pointer;
+  font-size:12px;
+}
+.clipboard-toast{
+  position:fixed;
+  right:22px;
+  bottom:22px;
+  z-index:1500;
+  max-width:min(360px,calc(100vw - 44px));
+  padding:9px 13px;
+  border:1px solid color-mix(in srgb,var(--cyan) 55%,var(--border));
+  border-radius:8px;
+  color:var(--text);
+  background:color-mix(in srgb,var(--surface) 94%,var(--cyan) 6%);
+  box-shadow:0 10px 30px #0007,0 0 14px color-mix(in srgb,var(--cyan) 18%,transparent);
+  font-size:12px;
+  font-weight:700;
+  opacity:0;
+  transform:translateY(6px);
+  transition:opacity .16s ease,transform .16s ease;
+}
+.clipboard-toast.visible{opacity:1;transform:translateY(0)}
