@@ -9,11 +9,21 @@ const FOLDER_SELECTION_KEY =
 const THEME_STORAGE_KEY =
   "sensorsphere.simulator.theme.v1";
 
+const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";
+let selectedTheme = "synthwave";
+
+function resolvedTheme(theme) {
+  if (theme !== "system") return theme;
+  return window.matchMedia(SYSTEM_THEME_QUERY).matches ? "dark" : "light";
+}
+
 function applyTheme(theme) {
-  const selected = ["synthwave", "dark", "light"].includes(theme)
+  const selected = ["system", "synthwave", "dark", "light"].includes(theme)
     ? theme
     : "synthwave";
-  document.documentElement.dataset.theme = selected;
+  selectedTheme = selected;
+  document.documentElement.dataset.theme = resolvedTheme(selected);
+  document.documentElement.dataset.themeMode = selected;
   const select = document.getElementById("themeSelect");
   if (select && select.value !== selected) select.value = selected;
   return selected;
@@ -33,6 +43,11 @@ function restoreTheme() {
   } catch {}
   applyTheme(selected);
 }
+
+const systemThemeMedia = window.matchMedia(SYSTEM_THEME_QUERY);
+systemThemeMedia.addEventListener("change", () => {
+  if (selectedTheme === "system") applyTheme("system");
+});
 
 restoreTheme();
 
