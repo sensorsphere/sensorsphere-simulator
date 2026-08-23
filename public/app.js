@@ -124,8 +124,27 @@ function folderChildren(kind, parentId) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function directFolderCount(kind, folderId) {
-  return itemsFor(kind).filter(item => (item.folderId || null) === (folderId || null)).length;
+function itemIsRunning(kind, item) {
+  if (kind === "basic") return Boolean(item.enabled);
+  return item.status === "RUNNING";
+}
+
+function runtimeSummary(kind, items) {
+  const total = items.length;
+  const running = items.filter(item => itemIsRunning(kind, item)).length;
+  return { running, total };
+}
+
+function directFolderRuntimeSummary(kind, folderId) {
+  return runtimeSummary(
+    kind,
+    itemsFor(kind).filter(item => (item.folderId || null) === (folderId || null))
+  );
+}
+
+function folderRuntimeBadge(kind, folderId) {
+  const { running, total } = directFolderRuntimeSummary(kind, folderId);
+  return `<span class="folder-count ${running > 0 ? "has-running" : ""}" title="${running} running / ${total} total">${running}/${total}</span>`;
 }
 
 function visibleItems(kind) {
@@ -177,7 +196,7 @@ function folderTreeRows(kind, parentId = null, depth = 0) {
             ${hasChildren ? `onclick="toggleFolderCollapsed(event,'${kind}','${folder.id}')" title="${collapsed ? "Expand folder" : "Collapse folder"}"` : ""}
           >${hasChildren ? (collapsed ? "▸" : "▾") : "·"}</span>
           <span class="folder-name">${esc(folder.name)}</span>
-          <span class="folder-count">${directFolderCount(kind, folder.id)}</span>
+          ${folderRuntimeBadge(kind, folder.id)}
         </button>
         <div class="folder-node-actions">
           <button onclick="event.stopPropagation();moveFolderPrompt('${kind}','${folder.id}')" title="Move folder">⇄</button>
@@ -352,12 +371,15 @@ function renderFolderNavigation(kind) {
     saveFolderSelection();
   }
 
+  const allSummary = runtimeSummary(kind, itemsFor(kind));
+  const unfiledSummary = directFolderRuntimeSummary(kind, null);
+
   target.innerHTML = `
     <button class="folder-row folder-root-drop ${folderSelection[kind] === "__all__" ? "active" : ""}" onclick="selectFolder('${kind}','__all__')" ondragover="event.preventDefault();this.classList.add('drop-target')" ondragleave="this.classList.remove('drop-target')" ondrop="folderDropToRoot(event,'${kind}')">
-      <span class="folder-icon">◆</span><span class="folder-name">All</span><span class="folder-count">${itemsFor(kind).length}</span>
+      <span class="folder-icon">◆</span><span class="folder-name">All</span><span class="folder-count ${allSummary.running > 0 ? "has-running" : ""}" title="${allSummary.running} running / ${allSummary.total} total">${allSummary.running}/${allSummary.total}</span>
     </button>
     <button class="folder-row ${folderSelection[kind] === "__unfiled__" ? "active" : ""}" onclick="selectFolder('${kind}','__unfiled__')">
-      <span class="folder-icon">◇</span><span class="folder-name">Unfiled</span><span class="folder-count">${directFolderCount(kind, null)}</span>
+      <span class="folder-icon">◇</span><span class="folder-name">Unfiled</span><span class="folder-count ${unfiledSummary.running > 0 ? "has-running" : ""}" title="${unfiledSummary.running} running / ${unfiledSummary.total} total">${unfiledSummary.running}/${unfiledSummary.total}</span>
     </button>
     ${folderTreeRows(kind)}
   `;
@@ -368,7 +390,11 @@ function renderFolderNavigation(kind) {
       : folderSelection[kind] === "__unfiled__"
         ? "Unfiled"
         : folderById(kind, folderSelection[kind])?.name || "All items";
-    context.innerHTML = `<strong>${esc(label)}</strong><span>${visibleItems(kind).length} item${visibleItems(kind).length === 1 ? "" : "s"}</span>`;
+    const summary = runtimeSummary(kind, visibleItems(kind));
+    context.innerHTML = `
+      <strong>${esc(label)}</strong>
+      <span class="folder-context-runtime ${summary.running > 0 ? "has-running" : ""}">${summary.running} running / ${summary.total} total</span>
+    `;
   }
 }
 

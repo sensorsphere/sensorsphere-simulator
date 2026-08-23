@@ -1087,3 +1087,113 @@ input:focus,select:focus,textarea:focus{
   .runtime-stats{justify-content:stretch}
   .runtime-stat-card{flex:1 1 145px;min-width:0}
 }
+
+/* SIM-024 / PR-074 fixed library controls + internal card scrolling + running counters */
+.folder-count{
+  min-width:38px;
+  font-variant-numeric:tabular-nums;
+}
+.folder-count.has-running{
+  color:var(--cyan);
+  border:1px solid color-mix(in srgb,var(--cyan) 42%,transparent);
+  background:color-mix(in srgb,var(--cyan) 12%,var(--surface-soft));
+}
+.folder-row.active .folder-count.has-running{
+  color:var(--cyan);
+  background:color-mix(in srgb,var(--cyan) 16%,var(--surface-soft));
+}
+.folder-context-runtime{
+  padding:2px 7px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:var(--surface-soft);
+  font-variant-numeric:tabular-nums;
+  font-weight:750;
+}
+.folder-context-runtime.has-running{
+  color:var(--cyan) !important;
+  border-color:color-mix(in srgb,var(--cyan) 40%,var(--border));
+  background:color-mix(in srgb,var(--cyan) 10%,var(--surface-soft));
+}
+
+@media(min-width:901px){
+  body{
+    height:100vh;
+    overflow:hidden;
+  }
+  main{
+    height:calc(100vh - 76px);
+    min-height:0;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .runtime-stats,
+  .main-tabs{
+    flex:0 0 auto;
+  }
+  #tab-basic:not([hidden]),
+  #tab-scenarios:not([hidden]){
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+  }
+  #tab-basic .library-layout,
+  #tab-scenarios .library-layout{
+    height:100%;
+    min-height:0;
+    align-items:stretch;
+  }
+  #tab-basic .folder-sidebar,
+  #tab-scenarios .folder-sidebar{
+    position:static;
+    height:100%;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+  }
+  #tab-basic .folder-tree,
+  #tab-scenarios .folder-tree{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+  }
+  #tab-basic .library-content,
+  #tab-scenarios .library-content{
+    height:100%;
+    min-height:0;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  #tab-basic .library-toolbar,
+  #tab-basic .folder-context,
+  #tab-scenarios .section-title,
+  #tab-scenarios .folder-context{
+    flex:0 0 auto;
+  }
+  #tab-basic #sensors{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding-right:6px;
+  }
+  #tab-scenarios .scenarios{
+    flex:1 1 auto;
+    height:100%;
+    min-height:0;
+    margin:0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #tab-scenarios #scenarios{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding-right:8px;
+  }
+}
