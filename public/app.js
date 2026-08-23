@@ -296,9 +296,9 @@ function renderSensors() {
     <section class="sensor ${collapsed ? "is-collapsed" : ""}">
       <div class="sensor-head">
         <div class="grow">
-          <h2>${esc(sensor.name)}</h2>
+          <h2 data-live-sensor-name="${esc(sensor.id)}">${esc(sensor.name)}</h2>
           <small>
-            UID: ${esc(sensor.uid)} ·
+            UID: <span data-live-sensor-uid="${esc(sensor.id)}">${esc(sensor.uid)}</span> ·
             <span class="sensor-status ${sensor.enabled?"running":"stopped"}">
               ${sensor.enabled?"RUNNING":"STOPPED"}
             </span>
@@ -336,9 +336,10 @@ function renderSensors() {
         ${collapsed ? "hidden" : ""}
       >
       <div class="config">
-        <label>Name <input value="${esc(sensor.name)}" onchange="patchSensor('${sensor.id}',{name:this.value})"></label>
-        <label>UID <input value="${esc(sensor.uid)}" onchange="patchSensor('${sensor.id}',{uid:this.value})"></label>
-        <label>Interval <input class="interval" type="number" min="1" value="${sensor.intervalSeconds}" onchange="patchSensor('${sensor.id}',{intervalSeconds:Number(this.value)})"> s</label>
+        <label>Name <input value="${esc(sensor.name)}" oninput="queueSensorPatch('${sensor.id}',{name:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"></label>
+        <label>UID <input value="${esc(sensor.uid)}" oninput="queueSensorPatch('${sensor.id}',{uid:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"></label>
+        <label class="topic-prefix-label">Topic prefix <input class="topic-prefix-input" value="${esc(sensor.topicPrefix || current.mqtt.topicPrefix || 'sensors/ble_gateway/sensor')}" oninput="queueSensorPatch('${sensor.id}',{topicPrefix:this.value})" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')" placeholder="${esc(current.mqtt.topicPrefix || 'sensors/ble_gateway/sensor')}"></label>
+        <label>Interval <input class="interval" type="number" min="1" value="${sensor.intervalSeconds}" oninput="queueSensorIntervalPatch('${sensor.id}',this.value)" onblur="flushSensorPatch('${sensor.id}')" onkeydown="commitSensorInput(event,'${sensor.id}')"> s</label>
       </div>
       <div class="metrics">
         ${sensor.metrics.map(metric => `
@@ -418,7 +419,7 @@ function renderSensors() {
                   </div>`).join("")}
               </div>` : ""}
 
-            <div class="topic">${esc(`sensors/ble_gateway/sensor/${metric.key}_${sensor.uid}/state`)}</div>
+            <div class="topic" data-live-sensor-topic="${esc(sensor.id)}" data-metric-key="${esc(metric.key)}">${esc(`${sensor.topicPrefix || current.mqtt.topicPrefix || "sensors/ble_gateway/sensor"}/${metric.key}_${sensor.uid}/state`)}</div>
           </div>`;
             })()
           }
@@ -1023,8 +1024,219 @@ function renderLogs() {
     .join("");
 }
 
+const sensorPatchTimers =
+  new Map();
+
+const pendingSensorPatches =
+  new Map();
+
+const SENSOR_PATCH_DEBOUNCE_MS =
+  400;
+
+function updateLocalSensor(
+  id,
+  body
+) {
+  const sensor =
+    current.sensors.find(
+      candidate =>
+        candidate.id === id
+    );
+
+  if (sensor) {
+    Object.assign(
+      sensor,
+      body
+    );
+  }
+}
+
+function normalizedTopicPrefix(
+  value
+) {
+  return String(
+    value ||
+    current.mqtt.topicPrefix ||
+    "sensors/ble_gateway/sensor"
+  )
+    .trim()
+    .replace(/^\/+|\/+$/g, "");
+}
+
+function updateSensorLiveUi(
+  id
+) {
+  const sensor =
+    current.sensors.find(
+      candidate =>
+        candidate.id === id
+    );
+
+  if (!sensor) {
+    return;
+  }
+
+  document
+    .querySelectorAll(
+      "[data-live-sensor-name]"
+    )
+    .forEach(element => {
+      if (
+        element.dataset.liveSensorName ===
+        id
+      ) {
+        element.textContent =
+          sensor.name;
+      }
+    });
+
+  document
+    .querySelectorAll(
+      "[data-live-sensor-uid]"
+    )
+    .forEach(element => {
+      if (
+        element.dataset.liveSensorUid ===
+        id
+      ) {
+        element.textContent =
+          sensor.uid;
+      }
+    });
+
+  const topicPrefix =
+    normalizedTopicPrefix(
+      sensor.topicPrefix
+    );
+
+  document
+    .querySelectorAll(
+      "[data-live-sensor-topic]"
+    )
+    .forEach(element => {
+      if (
+        element.dataset.liveSensorTopic !==
+        id
+      ) {
+        return;
+      }
+
+      const metricKey =
+        element.dataset.metricKey ||
+        "";
+
+      element.textContent =
+        `${topicPrefix}/${metricKey}_${sensor.uid}/state`;
+    });
+}
+
+function queueSensorPatch(
+  id,
+  body
+) {
+  updateLocalSensor(
+    id,
+    body
+  );
+
+  updateSensorLiveUi(
+    id
+  );
+
+  pendingSensorPatches.set(
+    id,
+    {
+      ...(pendingSensorPatches.get(id) || {}),
+      ...body
+    }
+  );
+
+  const existingTimer =
+    sensorPatchTimers.get(id);
+
+  if (existingTimer) {
+    clearTimeout(
+      existingTimer
+    );
+  }
+
+  sensorPatchTimers.set(
+    id,
+    setTimeout(
+      () => {
+        flushSensorPatch(id);
+      },
+      SENSOR_PATCH_DEBOUNCE_MS
+    )
+  );
+}
+
+function queueSensorIntervalPatch(
+  id,
+  value
+) {
+  const intervalSeconds =
+    Number(value);
+
+  if (
+    !Number.isFinite(intervalSeconds) ||
+    intervalSeconds < 1
+  ) {
+    return;
+  }
+
+  queueSensorPatch(
+    id,
+    { intervalSeconds }
+  );
+}
+
+async function flushSensorPatch(
+  id
+) {
+  const timer =
+    sensorPatchTimers.get(id);
+
+  if (timer) {
+    clearTimeout(timer);
+    sensorPatchTimers.delete(id);
+  }
+
+  const body =
+    pendingSensorPatches.get(id);
+
+  if (!body) {
+    return;
+  }
+
+  pendingSensorPatches.delete(id);
+
+  await api(
+    `/api/sensors/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    }
+  );
+
+  await refresh();
+}
+
+function commitSensorInput(
+  event,
+  id
+) {
+  if (event.key !== "Enter") {
+    return;
+  }
+
+  event.preventDefault();
+  flushSensorPatch(id);
+  event.currentTarget.blur();
+}
+
 async function action(url){ await api(url,{method:"POST"}); await refresh(); }
-async function sensorAction(id, actionName){ await action(`/api/sensors/${id}/${actionName}`); }
+async function sensorAction(id, actionName){ await flushSensorPatch(id); await action(`/api/sensors/${id}/${actionName}`); }
 async function patchSensor(id, body){ await api(`/api/sensors/${id}`,{method:"PATCH",body:JSON.stringify(body)}); await refresh(); }
 async function patchMetric(sid, mid, body){ await api(`/api/sensors/${sid}/metrics/${mid}`,{method:"PATCH",body:JSON.stringify(body)}); await refresh(); }
 

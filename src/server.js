@@ -26,6 +26,7 @@ const defaultState = {
     name: "Test Sensor 01",
     enabled: false,
     intervalSeconds: 15,
+    topicPrefix: TOPIC_PREFIX,
     metrics: [
       { id: crypto.randomUUID(), key: "temperature", value: "28.2", unit: "°C", enabled: true },
       { id: crypto.randomUUID(), key: "humidity", value: "38", unit: "%", enabled: true },
@@ -102,6 +103,11 @@ async function loadState() {
       sensor.enabled =
         sensor.enabled === true;
 
+      sensor.topicPrefix =
+        normalizeTopicPrefix(
+          sensor.topicPrefix ?? TOPIC_PREFIX
+        );
+
       for (const metric of sensor.metrics ?? []) {
         metric.mode ??= "manual";
         metric.randomMin ??= String(metric.value ?? 0);
@@ -134,7 +140,8 @@ function publicState() {
 
     mqtt: {
       url: MQTT_URL.replace(/\/\/.*@/, "//***@"),
-      connected: client.connected
+      connected: client.connected,
+      topicPrefix: TOPIC_PREFIX
     },
 
     sensors: state.sensors,
@@ -166,8 +173,22 @@ function addLog(entry) {
   state.logs = state.logs.slice(0, LOG_LIMIT);
 }
 
-function topicFor(sensor, metric) {
-  return `${TOPIC_PREFIX}/${metric.key}_${sensor.uid}/state`;
+function normalizeTopicPrefix(value) {
+  const normalized =
+    String(value ?? "")
+      .trim()
+      .replace(/^\/+|\/+$/g, "");
+
+  return normalized || TOPIC_PREFIX;
+}
+
+function topicFor(sensor, metric, source = "basic") {
+  const prefix =
+    source === "basic"
+      ? normalizeTopicPrefix(sensor.topicPrefix ?? TOPIC_PREFIX)
+      : TOPIC_PREFIX;
+
+  return `${prefix}/${metric.key}_${sensor.uid}/state`;
 }
 
 function numeric(value, fallback = 0) {
@@ -366,7 +387,8 @@ async function publishMetric(
   const topic =
     topicFor(
       sensor,
-      metric
+      metric,
+      source
     );
 
   const generated =
@@ -1466,6 +1488,7 @@ app.post("/api/sensors", async (req, res) => {
     name: String(req.body.name || "New sensor"),
     enabled: false,
     intervalSeconds: Math.max(1, Number(req.body.intervalSeconds) || 15),
+    topicPrefix: normalizeTopicPrefix(req.body.topicPrefix ?? TOPIC_PREFIX),
     metrics: []
   };
   state.sensors.push(sensor);
@@ -1528,6 +1551,8 @@ app.patch("/api/sensors/:id", async (req, res) => {
   stopSensor(sensor);
   if (req.body.uid !== undefined) sensor.uid = String(req.body.uid);
   if (req.body.name !== undefined) sensor.name = String(req.body.name);
+  if (req.body.topicPrefix !== undefined)
+    sensor.topicPrefix = normalizeTopicPrefix(req.body.topicPrefix);
   if (req.body.intervalSeconds !== undefined)
     sensor.intervalSeconds = Math.max(1, Number(req.body.intervalSeconds) || 15);
   restartIfRunning(sensor, wasRunning);

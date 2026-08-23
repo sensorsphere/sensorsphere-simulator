@@ -646,3 +646,5 @@ button:active{
 .scenario-card.is-collapsed{
   padding-bottom:12px;
 }
+
+.config .topic-prefix-input{width:280px;max-width:100%}

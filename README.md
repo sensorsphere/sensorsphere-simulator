@@ -19,7 +19,7 @@ Autonomous MQTT sensor simulator for SensorSphere testing.
 ## Start
 
 ```bash
-docker compose -f docker-compose.simulator.yml up -d --build
+docker compose up -d --build
 ```
 
 Open:
@@ -41,7 +41,7 @@ Override before starting:
 ```bash
 export SIMULATOR_MQTT_HOST=100.64.0.9
 export SIMULATOR_MQTT_PORT=1883
-docker compose -f docker-compose.simulator.yml up -d --build
+docker compose up -d --build
 ```
 
 Topics are generated as:
