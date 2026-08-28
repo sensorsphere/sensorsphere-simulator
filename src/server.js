@@ -1588,6 +1588,9 @@ function stopScenario(
   );
 }
 
+await loadBuildInfo();
+await loadState();
+
 const client = mqtt.connect(MQTT_URL, {
   username: process.env.MQTT_USERNAME || undefined,
   password: process.env.MQTT_PASSWORD || undefined,
@@ -1597,9 +1600,6 @@ const client = mqtt.connect(MQTT_URL, {
 client.on("connect", () => addLog({ status: "INFO", message: `MQTT connected: ${MQTT_URL}` }));
 client.on("reconnect", () => addLog({ status: "INFO", message: "MQTT reconnecting" }));
 client.on("error", error => addLog({ status: "ERROR", message: `MQTT: ${error.message}` }));
-
-await loadBuildInfo();
-await loadState();
 
 // Restore Basic Injection timers from the persisted sensor state.
 // startSensor() calls stopSensor(), which temporarily clears enabled,
