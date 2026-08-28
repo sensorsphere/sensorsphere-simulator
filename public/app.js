@@ -924,17 +924,17 @@ function formatBuildDate(value) {
 }
 
 function renderStatus() {
-  const buildVersion =
+  const instanceName =
     document.getElementById(
-      "buildVersion"
+      "instanceName"
     );
 
   if (
-    buildVersion &&
+    instanceName &&
     current.application
   ) {
-    buildVersion.textContent =
-      `${current.application.version} · build ${current.application.build}`;
+    instanceName.textContent =
+      current.application.instanceName || "DEV";
   }
 
   document.querySelectorAll("[data-build-date]").forEach(element => {
@@ -956,10 +956,15 @@ function renderStatus() {
         : "disconnected"
     }`;
 
+  const mqttTarget =
+    current.mqtt.host && current.mqtt.port
+      ? `${current.mqtt.host}:${current.mqtt.port}`
+      : "unknown";
+
   mqtt.textContent =
     current.mqtt.connected
-      ? "● MQTT connected"
-      : "● MQTT disconnected";
+      ? `● MQTT ${mqttTarget} connected`
+      : `● MQTT ${mqttTarget} disconnected`;
 }
 
 function shellQuote(value) {

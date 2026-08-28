@@ -85,18 +85,22 @@ Timeline mode is useful for automated validation of SensorSphere alert threshold
 `durationSeconds`, `cooldownSeconds`, `NO_DATA` and recovery behavior.
 
 
-## Build identification
+## Instance identification
 
-From SIM-004 onward, every Simulator patch increments both:
+Each Simulator instance can be given a friendly name with:
 
 ```text
-SIMULATOR_VERSION=SIM-004
-SIMULATOR_BUILD=004
+APP_INSTANCE_NAME=DEV
 ```
 
-The value is visible in the application header and in container startup logs.
+The default is `DEV`. The instance name is visible in the application header and
+in container startup logs, which makes multiple Simulator deployments easier to
+distinguish.
 
-The HTTP server also sends `no-store` cache headers for the development UI,
+The MQTT status badge also displays the effective broker endpoint, for example
+`MQTT 100.64.0.9:1883 connected`.
+
+The HTTP server sends `no-store` cache headers for the development UI,
 to prevent stale JavaScript/CSS after rebuilding the container.
 
 

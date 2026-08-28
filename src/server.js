@@ -16,13 +16,24 @@ const runtimeStats = {
   mqttPublished: 0
 };
 
-const APP_VERSION =
-  process.env.SIMULATOR_VERSION
-  ?? "SIM-020";
+const APP_INSTANCE_NAME =
+  process.env.APP_INSTANCE_NAME
+  ?? "DEV";
 
-const BUILD_NUMBER =
-  process.env.SIMULATOR_BUILD
-  ?? "020";
+const MQTT_TARGET = (() => {
+  try {
+    const parsed = new URL(MQTT_URL);
+    return {
+      host: parsed.hostname,
+      port: parsed.port || (parsed.protocol === "mqtts:" ? "8883" : "1883")
+    };
+  } catch {
+    return {
+      host: process.env.MQTT_HOST ?? "100.64.0.9",
+      port: process.env.MQTT_PORT ?? "1883"
+    };
+  }
+})();
 
 let BUILT_AT = process.env.SIMULATOR_BUILT_AT ?? null;
 
@@ -360,13 +371,14 @@ function importDocument(kind, document) {
 function publicState() {
   return {
     application: {
-      version: APP_VERSION,
-      build: BUILD_NUMBER,
+      instanceName: APP_INSTANCE_NAME,
       builtAt: BUILT_AT
     },
 
     mqtt: {
       url: MQTT_URL.replace(/\/\/.*@/, "//***@"),
+      host: MQTT_TARGET.host,
+      port: MQTT_TARGET.port,
       connected: client.connected,
       topicPrefix: TOPIC_PREFIX
     },
@@ -2864,7 +2876,7 @@ app.delete("/api/logs", async (_req, res) => {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(
-    `SensorSphere Simulator ${APP_VERSION} build ${BUILD_NUMBER} listening on :${PORT}`
+    `SensorSphere Simulator [${APP_INSTANCE_NAME}] listening on :${PORT}`
   );
 
   console.log(
