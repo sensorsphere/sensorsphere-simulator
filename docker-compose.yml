@@ -6,14 +6,14 @@ services:
     container_name: sensorsphere-simulator
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - ${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8090}:8090
     environment:
       PORT: "8090"
-      MQTT_HOST: "${SIMULATOR_MQTT_HOST:-100.64.0.9}"
+      MQTT_HOST: "${SIMULATOR_MQTT_HOST:-192.168.0.5}"
       MQTT_PORT: "${SIMULATOR_MQTT_PORT:-1883}"
       MQTT_USERNAME: "${SIMULATOR_MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${SIMULATOR_MQTT_PASSWORD:-}"
-      MQTT_TOPIC_PREFIX: "${MQTT_TOPIC_PREFIX:-sensors/ble_gateway/sensor}"
+      MQTT_TOPIC_PREFIX: "${MQTT_TOPIC_PREFIX:-sensors/ble_gateway/ble-gateway-01/sensor}"
       SIMULATOR_VERSION: "${SIMULATOR_VERSION:-SIM-020}"
       SIMULATOR_BUILD: "${SIMULATOR_BUILD:-020}"
       DATA_FILE: "/app/data/simulator.json"
