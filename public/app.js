@@ -9,6 +9,9 @@ const FOLDER_SELECTION_KEY =
 const THEME_STORAGE_KEY =
   "sensorsphere.simulator.theme.v1";
 
+const LOG_FILTERS_STORAGE_KEY =
+  "sensorsphere.simulator.publicationLogFilters.v1";
+
 const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";
 let selectedTheme = "synthwave";
 
@@ -1699,6 +1702,114 @@ function setSelectOptions(
   }
 }
 
+function loadLogFilters() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          LOG_FILTERS_STORAGE_KEY
+        ) || "{}"
+      );
+
+    return {
+      period:
+        ["1", "2", "5", "10"].includes(
+          String(parsed.period ?? "")
+        )
+          ? String(parsed.period)
+          : "5",
+      sensor:
+        typeof parsed.sensor === "string"
+          ? parsed.sensor
+          : "",
+      metric:
+        typeof parsed.metric === "string"
+          ? parsed.metric
+          : "",
+      status:
+        ["", "OK", "INFO", "ERROR"].includes(
+          String(parsed.status ?? "")
+        )
+          ? String(parsed.status ?? "")
+          : ""
+    };
+  } catch {
+    return {
+      period: "5",
+      sensor: "",
+      metric: "",
+      status: ""
+    };
+  }
+}
+
+let logFilters =
+  loadLogFilters();
+
+function saveLogFilters() {
+  try {
+    localStorage.setItem(
+      LOG_FILTERS_STORAGE_KEY,
+      JSON.stringify(
+        logFilters
+      )
+    );
+  } catch {}
+}
+
+function restoreLogFilters() {
+  const period =
+    document.getElementById(
+      "logPeriod"
+    );
+  const sensor =
+    document.getElementById(
+      "logSensor"
+    );
+  const metric =
+    document.getElementById(
+      "logMetric"
+    );
+  const status =
+    document.getElementById(
+      "logStatus"
+    );
+
+  if (period) {
+    period.value =
+      logFilters.period;
+  }
+
+  if (
+    sensor &&
+    [...sensor.options].some(
+      option =>
+        option.value ===
+          logFilters.sensor
+    )
+  ) {
+    sensor.value =
+      logFilters.sensor;
+  }
+
+  if (
+    metric &&
+    [...metric.options].some(
+      option =>
+        option.value ===
+          logFilters.metric
+    )
+  ) {
+    metric.value =
+      logFilters.metric;
+  }
+
+  if (status) {
+    status.value =
+      logFilters.status;
+  }
+}
+
 function renderLogFilters() {
   const sensors =
     [...new Set(
@@ -1727,6 +1838,8 @@ function renderLogFilters() {
     metrics,
     "All metrics"
   );
+
+  restoreLogFilters();
 }
 
 function resetLogFilters() {
@@ -1739,6 +1852,14 @@ function resetLogFilters() {
   if (sensor) sensor.value = "";
   if (metric) metric.value = "";
   if (status) status.value = "";
+
+  logFilters = {
+    period: "5",
+    sensor: "",
+    metric: "",
+    status: ""
+  };
+  saveLogFilters();
 
   renderLogs();
 }
@@ -1765,6 +1886,18 @@ function renderLogs() {
     document.getElementById(
       "logStatus"
     )?.value ?? "";
+
+  logFilters = {
+    period:
+      String(periodMinutes),
+    sensor:
+      sensorFilter,
+    metric:
+      metricFilter,
+    status:
+      statusFilter
+  };
+  saveLogFilters();
 
   const cutoff =
     Date.now() -
