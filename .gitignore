@@ -3,3 +3,5 @@
 data/simulator.json
 .env
 .env.local*
+tmp/
+recovery/
