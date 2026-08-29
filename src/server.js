@@ -9,7 +9,10 @@ const DATA_FILE = process.env.DATA_FILE ?? "/app/data/simulator.json";
 const MQTT_URL = process.env.MQTT_URL ??
   `mqtt://${process.env.MQTT_HOST ?? "100.64.0.9"}:${process.env.MQTT_PORT ?? "1883"}`;
 const TOPIC_PREFIX = process.env.MQTT_TOPIC_PREFIX ?? "sensors/ble_gateway/sensor";
-const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 250);
+const LOG_RETENTION_MINUTES = Number(
+  process.env.LOG_RETENTION_MINUTES ?? 60
+);
+const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 10000);
 
 const runtimeStats = {
   startedAt: new Date().toISOString(),
@@ -402,8 +405,34 @@ function publicState() {
 
     scenarioLocks:
       activeScenarioLocks(),
-    logs: state.logs.slice(0, LOG_LIMIT)
+    logs: (() => {
+      pruneLogs();
+      return state.logs;
+    })()
   };
+}
+
+function pruneLogs() {
+  const now = Date.now();
+  const retentionMs =
+    Number.isFinite(LOG_RETENTION_MINUTES) &&
+    LOG_RETENTION_MINUTES > 0
+      ? LOG_RETENTION_MINUTES * 60 * 1000
+      : 60 * 60 * 1000;
+  const limit =
+    Number.isFinite(LOG_LIMIT) && LOG_LIMIT > 0
+      ? Math.floor(LOG_LIMIT)
+      : 10000;
+
+  state.logs = state.logs
+    .filter(log => {
+      const timestamp = Date.parse(log.time);
+      return (
+        Number.isFinite(timestamp) &&
+        now - timestamp <= retentionMs
+      );
+    })
+    .slice(0, limit);
 }
 
 function addLog(entry) {
@@ -412,7 +441,7 @@ function addLog(entry) {
     time: new Date().toISOString(),
     ...entry
   });
-  state.logs = state.logs.slice(0, LOG_LIMIT);
+  pruneLogs();
 }
 
 function normalizeTopicPrefix(value) {

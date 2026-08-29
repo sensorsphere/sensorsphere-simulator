@@ -103,6 +103,18 @@ The MQTT status badge also displays the effective broker endpoint, for example
 The HTTP server sends `no-store` cache headers for the development UI,
 to prevent stale JavaScript/CSS after rebuilding the container.
 
+Publication log retention is configurable with:
+
+```text
+LOG_RETENTION_MINUTES=60
+LOG_LIMIT=10000
+```
+
+By default, log entries are retained for up to 60 minutes, with a hard safety cap
+of 10,000 entries. Age-based retention is applied before the entry-count limit, so
+short Publication log filters such as `Last 5 minutes` are not truncated merely
+because many MQTT messages were published during that period.
+
 
 ## SIM-005 scenarios
 
