@@ -1,5 +1,5 @@
 export const MODULE_NAME = "simulator";
-export const MODULE_VERSION = "1.2.0";
+export const MODULE_VERSION = "1.2.1";
 
 export const MODULE_CHANGE_TYPES = [
   "added",
@@ -11,6 +11,16 @@ export const MODULE_CHANGE_TYPES = [
 ];
 
 export const MODULE_CHANGELOG = {
+  "1.2.1": {
+    releasedAt: "2026-08-29T11:21:00+02:00",
+    patch: "Simulator-publication-log-table-scroll-v1.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Publication Log vertical scrolling is contained inside the table with a sticky header"
+      }
+    ]
+  },
   "1.2.0": {
     releasedAt: "2026-08-29T10:21:00+02:00",
     patch: "Simulator-state-backup-hardening-v1.patch",
