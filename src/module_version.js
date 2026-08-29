@@ -13,11 +13,11 @@ export const MODULE_CHANGE_TYPES = [
 export const MODULE_CHANGELOG = {
   "1.0.1": {
     releasedAt: "2026-08-29T08:19:00+02:00",
-    patch: "Simulator-module-versioning-footer-alignment-v1.patch",
+    patch: "Simulator-module-versioning-footer-alignment-v3.patch",
     changes: [
       {
         type: "fixed",
-        description: "Build footer value alignment"
+        description: "Single Simulator version line in navigation footer"
       }
     ]
   },

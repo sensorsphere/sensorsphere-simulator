@@ -1041,10 +1041,10 @@ function renderStatus() {
       `v${current.application.version || "unknown"}`;
   }
 
-  document.querySelectorAll("[data-build-date]").forEach(element => {
-    const builtAt = current.application?.builtAt;
-    element.textContent = builtAt
-      ? formatBuildDate(builtAt)
+  document.querySelectorAll("[data-module-version]").forEach(element => {
+    const version = current.application?.version;
+    element.textContent = version
+      ? `v${version}`
       : "unknown";
   });
 
