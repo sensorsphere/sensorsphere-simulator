@@ -61,6 +61,24 @@ sensors/ble_gateway/sensor/temperature_11_22_33/state
 Sensors intentionally start in STOPPED state after application restart.
 Configuration and logs are stored in `data/simulator.json`.
 
+State persistence is protected by atomic writes. The previous valid state is kept
+as `data/simulator.json.bak`. If the primary state is invalid at startup, the
+backend preserves it as `data/simulator.json.corrupt-<timestamp>` and attempts to
+recover from the `.bak` file instead of silently replacing the configuration with
+defaults. If neither file is valid, startup fails without overwriting either file.
+
+Configuration changes are also snapshotted periodically under `data/backups/`.
+The defaults are:
+
+```text
+SIMULATOR_BACKUP_INTERVAL_MINUTES=5
+SIMULATOR_BACKUP_RETENTION=288
+```
+
+A timestamped snapshot is created only when persisted configuration has changed
+since the previous snapshot. Runtime-only MQTT publications and publication-log
+changes do not create historical backups.
+
 
 ## SIM-002 generation modes
 

@@ -1,5 +1,5 @@
 export const MODULE_NAME = "simulator";
-export const MODULE_VERSION = "1.1.0";
+export const MODULE_VERSION = "1.2.0";
 
 export const MODULE_CHANGE_TYPES = [
   "added",
@@ -11,6 +11,20 @@ export const MODULE_CHANGE_TYPES = [
 ];
 
 export const MODULE_CHANGELOG = {
+  "1.2.0": {
+    releasedAt: "2026-08-29T10:21:00+02:00",
+    patch: "Simulator-state-backup-hardening-v1.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Atomic Simulator state persistence and non-destructive startup recovery"
+      },
+      {
+        type: "added",
+        description: "Recovery backup and periodic configuration snapshots with retention"
+      }
+    ]
+  },
   "1.1.0": {
     releasedAt: "2026-08-29T08:36:00+02:00",
     patch: "Simulator-ramp-decimal-precision-v1.patch",

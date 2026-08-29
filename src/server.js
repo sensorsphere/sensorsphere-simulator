@@ -20,6 +20,17 @@ const LOG_RETENTION_MINUTES = Number(
   process.env.LOG_RETENTION_MINUTES ?? 60
 );
 const LOG_LIMIT = Number(process.env.LOG_LIMIT ?? 10000);
+const BACKUP_INTERVAL_MINUTES = Number(
+  process.env.SIMULATOR_BACKUP_INTERVAL_MINUTES ?? 5
+);
+const BACKUP_RETENTION = Number(
+  process.env.SIMULATOR_BACKUP_RETENTION ?? 288
+);
+const STATE_BACKUP_FILE = `${DATA_FILE}.bak`;
+const STATE_BACKUP_DIR = path.join(
+  path.dirname(DATA_FILE),
+  "backups"
+);
 
 const runtimeStats = {
   startedAt: new Date().toISOString(),
@@ -81,97 +92,402 @@ async function loadBuildInfo() {
   }
 }
 
-async function loadState() {
-  try {
-    state = JSON.parse(await fs.readFile(DATA_FILE, "utf8"));
-    state.logs ??= [];
-    state.sensors ??= [];
-    state.scenarios ??= [];
-    state.folders ??= {};
-    state.folders.basic ??= [];
-    state.folders.scenarios ??= [];
+async function normalizeLoadedState() {
+  state.logs ??= [];
+  state.sensors ??= [];
+  state.scenarios ??= [];
+  state.folders ??= {};
+  state.folders.basic ??= [];
+  state.folders.scenarios ??= [];
 
-    normalizeFolderAssignments();
+  normalizeFolderAssignments();
 
-    for (const scenario of state.scenarios) {
-      scenario.status = "STOPPED";
-      scenario.startedAt = null;
-      scenario.pausedAt = null;
-      scenario.elapsedBeforePause = 0;
-      scenario.runtimeSnapshot = null;
+  for (const scenario of state.scenarios) {
+    scenario.status = "STOPPED";
+    scenario.startedAt = null;
+    scenario.pausedAt = null;
+    scenario.elapsedBeforePause = 0;
+    scenario.runtimeSnapshot = null;
 
-      for (const action of scenario.actions ?? []) {
-        if (!action.sensorUid && action.sensorId) {
-          const sensor =
-            state.sensors.find(
-              current =>
-                current.id ===
-                action.sensorId
-            );
+    for (const action of scenario.actions ?? []) {
+      if (!action.sensorUid && action.sensorId) {
+        const sensor =
+          state.sensors.find(
+            current =>
+              current.id ===
+              action.sensorId
+          );
 
-          if (sensor) {
-            action.sensorUid =
-              sensor.uid;
-          }
+        if (sensor) {
+          action.sensorUid =
+            sensor.uid;
         }
+      }
 
-        if (
-          !action.metricKey &&
-          action.metricId
-        ) {
-          const sensor =
-            state.sensors.find(
-              current =>
-                current.id ===
-                action.sensorId
-            );
+      if (
+        !action.metricKey &&
+        action.metricId
+      ) {
+        const sensor =
+          state.sensors.find(
+            current =>
+              current.id ===
+              action.sensorId
+          );
 
-          const metric =
-            sensor?.metrics.find(
-              current =>
-                current.id ===
-                action.metricId
-            );
+        const metric =
+          sensor?.metrics.find(
+            current =>
+              current.id ===
+              action.metricId
+          );
 
-          if (metric) {
-            action.metricKey =
-              metric.key;
-          }
+        if (metric) {
+          action.metricKey =
+            metric.key;
         }
       }
     }
-    for (const sensor of state.sensors) {
-      // Keep the persisted Basic Injection RUNNING / STOPPED state.
-      // Timers are recreated after loadState() has completed.
-      sensor.enabled =
-        sensor.enabled === true;
+  }
 
-      sensor.topicPrefix =
-        normalizeTopicPrefix(
-          sensor.topicPrefix ?? TOPIC_PREFIX
-        );
+  for (const sensor of state.sensors) {
+    // Keep the persisted Basic Injection RUNNING / STOPPED state.
+    // Timers are recreated after loadState() has completed.
+    sensor.enabled =
+      sensor.enabled === true;
 
-      for (const metric of sensor.metrics ?? []) {
-        metric.mode ??= "manual";
-        metric.randomMin ??= String(metric.value ?? 0);
-        metric.randomMax ??= String(metric.value ?? 0);
-        metric.rampStart ??= String(metric.value ?? 0);
-        metric.rampEnd ??= String(metric.value ?? 0);
-        metric.rampStep ??= "1";
-        metric.rampDirection ??= 1;
-        metric.timeline ??= [];
-        metric.timelineStartedAt = null;
-      }
+    sensor.topicPrefix =
+      normalizeTopicPrefix(
+        sensor.topicPrefix ?? TOPIC_PREFIX
+      );
+
+    for (const metric of sensor.metrics ?? []) {
+      metric.mode ??= "manual";
+      metric.randomMin ??= String(metric.value ?? 0);
+      metric.randomMax ??= String(metric.value ?? 0);
+      metric.rampStart ??= String(metric.value ?? 0);
+      metric.rampEnd ??= String(metric.value ?? 0);
+      metric.rampStep ??= "1";
+      metric.rampDirection ??= 1;
+      metric.timeline ??= [];
+      metric.timelineStartedAt = null;
     }
-  } catch {
-    state = structuredClone(defaultState);
-    await saveState();
   }
 }
 
-async function saveState() {
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  await fs.writeFile(DATA_FILE, JSON.stringify(state, null, 2));
+async function loadStateFile(filePath) {
+  state = JSON.parse(
+    await fs.readFile(
+      filePath,
+      "utf8"
+    )
+  );
+
+  await normalizeLoadedState();
+}
+
+function timestampForFileName() {
+  return new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-");
+}
+
+async function atomicWriteText(filePath, content) {
+  await fs.mkdir(
+    path.dirname(filePath),
+    { recursive: true }
+  );
+
+  const temporaryFile =
+    `${filePath}.tmp-${process.pid}-${crypto.randomUUID()}`;
+
+  try {
+    await fs.writeFile(
+      temporaryFile,
+      content
+    );
+
+    await fs.rename(
+      temporaryFile,
+      filePath
+    );
+  } finally {
+    await fs.rm(
+      temporaryFile,
+      { force: true }
+    ).catch(() => {});
+  }
+}
+
+async function atomicCopyFile(source, destination) {
+  const temporaryFile =
+    `${destination}.tmp-${process.pid}-${crypto.randomUUID()}`;
+
+  await fs.mkdir(
+    path.dirname(destination),
+    { recursive: true }
+  );
+
+  try {
+    await fs.copyFile(
+      source,
+      temporaryFile
+    );
+
+    await fs.rename(
+      temporaryFile,
+      destination
+    );
+  } finally {
+    await fs.rm(
+      temporaryFile,
+      { force: true }
+    ).catch(() => {});
+  }
+}
+
+async function refreshRecoveryBackup() {
+  await atomicCopyFile(
+    DATA_FILE,
+    STATE_BACKUP_FILE
+  );
+}
+
+async function preserveInvalidStateFile() {
+  const invalidFile =
+    `${DATA_FILE}.corrupt-${timestampForFileName()}`;
+
+  await fs.rename(
+    DATA_FILE,
+    invalidFile
+  );
+
+  console.error(
+    `Invalid Simulator state preserved as ${invalidFile}`
+  );
+}
+
+let saveStateQueue = Promise.resolve();
+let configurationRevision = 0;
+let backedUpConfigurationRevision = 0;
+
+async function persistStateSnapshot(
+  serializedState,
+  {
+    configurationChanged,
+    backupCurrent
+  }
+) {
+  if (backupCurrent) {
+    try {
+      await refreshRecoveryBackup();
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
+  await atomicWriteText(
+    DATA_FILE,
+    serializedState
+  );
+
+  if (configurationChanged) {
+    configurationRevision += 1;
+  }
+}
+
+function saveState({
+  configurationChanged = true,
+  backupCurrent = configurationChanged
+} = {}) {
+  const serializedState =
+    `${JSON.stringify(state, null, 2)}\n`;
+
+  saveStateQueue =
+    saveStateQueue
+      .catch(() => {})
+      .then(() =>
+        persistStateSnapshot(
+          serializedState,
+          {
+            configurationChanged,
+            backupCurrent
+          }
+        )
+      );
+
+  return saveStateQueue;
+}
+
+async function loadState() {
+  let primaryError = null;
+
+  try {
+    await loadStateFile(DATA_FILE);
+  } catch (error) {
+    primaryError = error;
+  }
+
+  if (!primaryError) {
+    await refreshRecoveryBackup();
+    return;
+  }
+
+  if (primaryError?.code === "ENOENT") {
+    state = structuredClone(defaultState);
+    await normalizeLoadedState();
+    await saveState({
+      configurationChanged: false,
+      backupCurrent: false
+    });
+    await refreshRecoveryBackup();
+    console.log(
+      `Created default Simulator state at ${DATA_FILE}`
+    );
+    return;
+  }
+
+  console.error(
+    `Unable to load Simulator state from ${DATA_FILE}:`,
+    primaryError
+  );
+
+  try {
+    await loadStateFile(STATE_BACKUP_FILE);
+  } catch (backupError) {
+    console.error(
+      `Unable to recover Simulator state from ${STATE_BACKUP_FILE}:`,
+      backupError
+    );
+
+    throw new Error(
+      "Simulator state is invalid and no valid recovery backup is available"
+    );
+  }
+
+  await preserveInvalidStateFile();
+
+  await saveState({
+    configurationChanged: false,
+    backupCurrent: false
+  });
+
+  await refreshRecoveryBackup();
+
+  console.warn(
+    `Recovered Simulator state from ${STATE_BACKUP_FILE}`
+  );
+}
+
+function backupIntervalMilliseconds() {
+  const minutes =
+    Number.isFinite(BACKUP_INTERVAL_MINUTES) &&
+    BACKUP_INTERVAL_MINUTES > 0
+      ? BACKUP_INTERVAL_MINUTES
+      : 5;
+
+  return minutes * 60 * 1000;
+}
+
+function backupRetentionCount() {
+  return Number.isFinite(BACKUP_RETENTION) &&
+    BACKUP_RETENTION > 0
+    ? Math.floor(BACKUP_RETENTION)
+    : 288;
+}
+
+async function pruneConfigurationBackups() {
+  let entries;
+
+  try {
+    entries = await fs.readdir(
+      STATE_BACKUP_DIR,
+      { withFileTypes: true }
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+
+  const backups =
+    entries
+      .filter(
+        entry =>
+          entry.isFile() &&
+          /^simulator-.*\.json$/.test(entry.name)
+      )
+      .map(entry => entry.name)
+      .sort()
+      .reverse();
+
+  for (
+    const fileName
+    of backups.slice(
+      backupRetentionCount()
+    )
+  ) {
+    await fs.rm(
+      path.join(
+        STATE_BACKUP_DIR,
+        fileName
+      ),
+      { force: true }
+    );
+  }
+}
+
+async function backupConfigurationIfChanged() {
+  const revision =
+    configurationRevision;
+
+  if (
+    revision <=
+    backedUpConfigurationRevision
+  ) {
+    return;
+  }
+
+  const fileName =
+    `simulator-${timestampForFileName()}.json`;
+
+  const destination =
+    path.join(
+      STATE_BACKUP_DIR,
+      fileName
+    );
+
+  await atomicWriteText(
+    destination,
+    `${JSON.stringify(state, null, 2)}\n`
+  );
+
+  backedUpConfigurationRevision =
+    revision;
+
+  await pruneConfigurationBackups();
+
+  console.log(
+    `Simulator configuration backup created: ${destination}`
+  );
+}
+
+function startConfigurationBackupTimer() {
+  const timer = setInterval(
+    () => {
+      backupConfigurationIfChanged()
+        .catch(error => {
+          console.error(
+            "Unable to create Simulator configuration backup:",
+            error
+          );
+        });
+    },
+    backupIntervalMilliseconds()
+  );
+
+  timer.unref?.();
 }
 
 
@@ -767,7 +1083,7 @@ async function publishSensor(sensor) {
     );
   }
 
-  await saveState();
+  await saveState({ configurationChanged: false });
 }
 
 function stopSensor(sensor) {
@@ -1305,7 +1621,7 @@ async function scenarioTick(
     });
   }
 
-  await saveState();
+  await saveState({ configurationChanged: false });
 }
 
 function resetScenarioActions(
@@ -1699,8 +2015,10 @@ if (
   sensorsToRestart.length >
   0
 ) {
-  await saveState();
+  await saveState({ configurationChanged: false });
 }
+
+startConfigurationBackupTimer();
 
 const app = express();
 
@@ -2928,7 +3246,7 @@ app.delete("/api/scenarios/:scenarioId/actions/:actionId", async (req, res) => {
 
 app.delete("/api/logs", async (_req, res) => {
   state.logs = [];
-  await saveState();
+  await saveState({ configurationChanged: false });
   res.sendStatus(204);
 });
 
