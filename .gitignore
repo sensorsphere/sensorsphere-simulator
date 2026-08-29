@@ -1,6 +1,6 @@
 
 # Simulator runtime data
-data/simulator.json
+data/
 .env
 .env.local*
 tmp/
