@@ -24,6 +24,13 @@
     >
       DEV
     </span>
+    <span
+      id="moduleVersion"
+      class="module-version"
+      title="Simulator version"
+    >
+      v1.0.0
+    </span>
   </div>
 
   <div class="header-actions">
@@ -82,6 +89,14 @@
         <path d="M12 15h5"/>
       </svg>
       <span>Publication log</span>
+    </button>
+    <button class="main-tab" data-tab="changelog" onclick="selectMainTab('changelog')">
+      <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 3h9l3 3v15H6z"/>
+        <path d="M15 3v4h4"/>
+        <path d="M9 11h6M9 15h6"/>
+      </svg>
+      <span>Changelog</span>
     </button>
   </nav>
 
@@ -245,6 +260,35 @@
     </div>
   </section>
   </section>
+
+
+  <section id="tab-changelog" class="tab-panel" hidden>
+    <section class="changelog-panel">
+      <div class="section-title">
+        <div>
+          <h2>Versions &amp; changelog</h2>
+          <span>SensorSphere Simulator release history</span>
+        </div>
+        <span id="changelogCurrentVersion" class="changelog-current-version">v1.0.0</span>
+      </div>
+      <div class="changelog-filters">
+        <label>
+          Change type
+          <select id="changelogType" onchange="renderChangelog()">
+            <option value="">All changes</option>
+            <option value="added">Added</option>
+            <option value="changed">Changed</option>
+            <option value="fixed">Fixed</option>
+            <option value="removed">Removed</option>
+            <option value="deprecated">Deprecated</option>
+            <option value="security">Security</option>
+          </select>
+        </label>
+      </div>
+      <div id="changelogEntries" class="changelog-entries"></div>
+    </section>
+  </section>
+
 </main>
 <script src="/app.js"></script>
 </body>

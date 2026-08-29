@@ -632,7 +632,7 @@ async function importLibrary(kind, input) {
 
 function selectMainTab(tab) {
   const selected =
-    ["basic", "scenarios", "logs"].includes(tab)
+    ["basic", "scenarios", "logs", "changelog"].includes(tab)
       ? tab
       : "basic";
 
@@ -865,6 +865,7 @@ async function refresh() {
 
     renderLogFilters();
     renderLogs();
+    renderChangelog();
 
   } catch (e) {
     const mqtt =
@@ -878,6 +879,93 @@ async function refresh() {
     mqtt.textContent =
       "API disconnected";
   }
+}
+
+function formatReleaseDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value || "unknown");
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function renderChangelog() {
+  if (!current?.application) return;
+
+  const container =
+    document.getElementById(
+      "changelogEntries"
+    );
+  const currentVersion =
+    document.getElementById(
+      "changelogCurrentVersion"
+    );
+  const typeFilter =
+    document.getElementById(
+      "changelogType"
+    )?.value || "";
+
+  if (currentVersion) {
+    currentVersion.textContent =
+      `v${current.application.version || "unknown"}`;
+  }
+
+  if (!container) return;
+
+  const changelog =
+    current.application.changelog || {};
+
+  const entries =
+    Object.entries(changelog)
+      .sort(
+        ([, left], [, right]) =>
+          new Date(right.releasedAt).getTime() -
+          new Date(left.releasedAt).getTime()
+      )
+      .map(([version, entry]) => {
+        const changes =
+          (entry.changes || []).filter(
+            change =>
+              !typeFilter ||
+              change.type === typeFilter
+          );
+
+        if (changes.length === 0) {
+          return "";
+        }
+
+        return `
+          <article class="changelog-entry">
+            <div class="changelog-entry-head">
+              <div>
+                <strong>v${esc(version)}</strong>
+                <span>${esc(formatReleaseDate(entry.releasedAt))}</span>
+              </div>
+              <code>${esc(entry.patch || "")}</code>
+            </div>
+            <div class="changelog-change-list">
+              ${changes.map(change => `
+                <div class="changelog-change">
+                  <span class="change-type change-type-${esc(change.type)}">${esc(change.type)}</span>
+                  <span>${esc(change.description)}</span>
+                </div>
+              `).join("")}
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+
+  container.innerHTML =
+    entries ||
+    '<div class="changelog-empty">No changelog entries match this filter.</div>';
 }
 
 function renderRuntimeStats() {
@@ -938,6 +1026,19 @@ function renderStatus() {
   ) {
     instanceName.textContent =
       current.application.instanceName || "DEV";
+  }
+
+  const moduleVersion =
+    document.getElementById(
+      "moduleVersion"
+    );
+
+  if (
+    moduleVersion &&
+    current.application
+  ) {
+    moduleVersion.textContent =
+      `v${current.application.version || "unknown"}`;
   }
 
   document.querySelectorAll("[data-build-date]").forEach(element => {

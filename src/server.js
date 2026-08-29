@@ -4,6 +4,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
+import {
+  MODULE_CHANGELOG,
+  MODULE_CHANGE_TYPES,
+  MODULE_NAME,
+  MODULE_VERSION
+} from "./module_version.js";
+
 const PORT = Number(process.env.PORT ?? 8090);
 const DATA_FILE = process.env.DATA_FILE ?? "/app/data/simulator.json";
 const MQTT_URL = process.env.MQTT_URL ??
@@ -375,7 +382,11 @@ function publicState() {
   return {
     application: {
       instanceName: APP_INSTANCE_NAME,
-      builtAt: BUILT_AT
+      builtAt: BUILT_AT,
+      module: MODULE_NAME,
+      version: MODULE_VERSION,
+      changeTypes: MODULE_CHANGE_TYPES,
+      changelog: MODULE_CHANGELOG
     },
 
     mqtt: {

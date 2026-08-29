@@ -378,3 +378,16 @@ sensor UIDs. Their RSSI values are deliberately different so Gateway Coverage ca
 produce different gateway recommendations. Start the imported injections and allow
 roughly 80 seconds at the configured 10-second interval to exceed an 8-sample
 recommendation minimum.
+
+
+## Module versioning
+
+SensorSphere Simulator uses an independent three-part module version:
+
+- `major`: major functional or architectural evolution.
+- `minor`: new functional development.
+- `rev`: correction or revision of the same development.
+
+The authoritative version and structured changelog live in `src/module_version.js`. Each changelog entry records `releasedAt`, the source patch name, and typed changes using `added`, `changed`, `fixed`, `removed`, `deprecated`, or `security`.
+
+The current version is exposed by `/api/state` and displayed in the header. The **Changelog** tab renders the complete release history and can filter entries by change type.
