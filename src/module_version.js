@@ -1,5 +1,5 @@
 export const MODULE_NAME = "simulator";
-export const MODULE_VERSION = "1.0.1";
+export const MODULE_VERSION = "1.1.0";
 
 export const MODULE_CHANGE_TYPES = [
   "added",
@@ -11,6 +11,20 @@ export const MODULE_CHANGE_TYPES = [
 ];
 
 export const MODULE_CHANGELOG = {
+  "1.1.0": {
+    releasedAt: "2026-08-29T08:36:00+02:00",
+    patch: "Simulator-ramp-decimal-precision-v1.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Decimal precision artifacts in generated ramp values"
+      },
+      {
+        type: "changed",
+        description: "Shared decimal normalization for metric and scenario ramps"
+      }
+    ]
+  },
   "1.0.1": {
     releasedAt: "2026-08-29T08:19:00+02:00",
     patch: "Simulator-module-versioning-footer-alignment-v3.patch",

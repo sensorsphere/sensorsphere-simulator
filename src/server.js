@@ -481,6 +481,25 @@ function numeric(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function decimalPlaces(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return 0;
+
+  const [coefficient, exponentText] = text.split("e");
+  const exponent = Number(exponentText ?? 0);
+  const fractionDigits = coefficient.split(".")[1]?.length ?? 0;
+
+  return Math.max(
+    0,
+    Math.min(12, fractionDigits - (Number.isFinite(exponent) ? exponent : 0))
+  );
+}
+
+function formatNumericValue(value, decimals) {
+  const precision = Math.max(0, Math.min(12, decimals));
+  return Number(value.toFixed(precision)).toString();
+}
+
 function randomValue(metric) {
   const min = numeric(metric.randomMin, 0);
   const max = numeric(metric.randomMax, min);
@@ -489,11 +508,11 @@ function randomValue(metric) {
   const value = low + Math.random() * (high - low);
 
   const decimals = Math.max(
-    String(metric.randomMin ?? "").split(".")[1]?.length ?? 0,
-    String(metric.randomMax ?? "").split(".")[1]?.length ?? 0
+    decimalPlaces(metric.randomMin),
+    decimalPlaces(metric.randomMax)
   );
 
-  return value.toFixed(Math.min(decimals, 6));
+  return formatNumericValue(value, decimals);
 }
 
 function rampValue(metric) {
@@ -519,8 +538,14 @@ function rampValue(metric) {
     direction = 1;
   }
 
+  const decimals = Math.max(
+    decimalPlaces(metric.rampStart),
+    decimalPlaces(metric.rampEnd),
+    decimalPlaces(metric.rampStep)
+  );
+
   metric.rampDirection = direction;
-  metric.value = String(next);
+  metric.value = formatNumericValue(next, decimals);
 
   return metric.value;
 }
@@ -2571,30 +2596,23 @@ app.post("/api/scenarios/:id/generate-ramp", async (req, res) => {
 
   const decimals =
     Math.max(
-      String(
+      decimalPlaces(
         req.body.startValue
-      ).split(".")[1]?.length
-        ?? 0,
-      String(
+      ),
+      decimalPlaces(
         req.body.endValue
-      ).split(".")[1]?.length
-        ?? 0,
-      String(
+      ),
+      decimalPlaces(
         req.body.step
-      ).split(".")[1]?.length
-        ?? 0
+      )
     );
 
   const formatValue =
     value =>
-      Number(
-        value.toFixed(
-          Math.min(
-            decimals,
-            6
-          )
-        )
-      ).toString();
+      formatNumericValue(
+        value,
+        decimals
+      );
 
   while (
     direction > 0
