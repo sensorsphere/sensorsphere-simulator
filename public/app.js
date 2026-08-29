@@ -1149,7 +1149,7 @@ function renderSensors() {
               <input value="${esc(metric.key)}" ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{key:this.value})" placeholder="metric key">
               <input value="${esc(metric.value)}" ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{value:this.value})" placeholder="value">
               <input value="${esc(metric.unit)}" ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{unit:this.value})" placeholder="unit">
-              <select ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{mode:this.value})">
+              <select ${lockedByScenario?"disabled":""} onchange="patchMetric('${sensor.id}','${metric.id}',{mode:this.value},true)">
                 <option value="manual" ${metric.mode==="manual"?"selected":""}>Manual</option>
                 <option value="random" ${metric.mode==="random"?"selected":""}>Random</option>
                 <option value="ramp" ${metric.mode==="ramp"?"selected":""}>Ramp</option>
@@ -1164,32 +1164,48 @@ function renderSensors() {
             </div>
 
             ${metric.mode==="random" ? `
-              <div class="mode-config">
-                <label>Min <input value="${esc(metric.randomMin)}" onchange="patchMetric('${sensor.id}','${metric.id}',{randomMin:this.value})"></label>
-                <label>Max <input value="${esc(metric.randomMax)}" onchange="patchMetric('${sensor.id}','${metric.id}',{randomMax:this.value})"></label>
-                <span>New random value on every publish</span>
+              <div class="mode-config mode-settings mode-settings-random">
+                <div class="mode-settings-head">
+                  <strong>Random settings</strong>
+                  <span>Generates a new random value on every publish.</span>
+                </div>
+                <div class="mode-settings-fields">
+                  <label>Minimum <input value="${esc(metric.randomMin)}" onchange="patchMetric('${sensor.id}','${metric.id}',{randomMin:this.value})"></label>
+                  <label>Maximum <input value="${esc(metric.randomMax)}" onchange="patchMetric('${sensor.id}','${metric.id}',{randomMax:this.value})"></label>
+                </div>
               </div>` : ""}
 
             ${metric.mode==="ramp" ? `
-              <div class="mode-config">
-                <label>Start <input value="${esc(metric.rampStart)}" onchange="patchMetric('${sensor.id}','${metric.id}',{rampStart:this.value,value:this.value})"></label>
-                <label>End <input value="${esc(metric.rampEnd)}" onchange="patchMetric('${sensor.id}','${metric.id}',{rampEnd:this.value})"></label>
-                <label>Step <input value="${esc(metric.rampStep)}" onchange="patchMetric('${sensor.id}','${metric.id}',{rampStep:this.value})"></label>
-                <span>Ping-pong ramp on each publish</span>
+              <div class="mode-config mode-settings mode-settings-ramp">
+                <div class="mode-settings-head">
+                  <strong>Ramp settings</strong>
+                  <span>Moves from Start to End by Step, then reverses direction.</span>
+                </div>
+                <div class="mode-settings-fields">
+                  <label>Start <input value="${esc(metric.rampStart)}" onchange="patchMetric('${sensor.id}','${metric.id}',{rampStart:this.value,value:this.value})"></label>
+                  <label>End <input value="${esc(metric.rampEnd)}" onchange="patchMetric('${sensor.id}','${metric.id}',{rampEnd:this.value})"></label>
+                  <label>Step <input value="${esc(metric.rampStep)}" onchange="patchMetric('${sensor.id}','${metric.id}',{rampStep:this.value})"></label>
+                </div>
               </div>` : ""}
 
             ${metric.mode==="timeline" ? `
-              <div class="mode-config timeline-editor">
-                <div class="timeline-title">
-                  <strong>Timeline</strong>
+              <div class="mode-config mode-settings mode-settings-timeline timeline-editor">
+                <div class="mode-settings-head timeline-title">
+                  <div>
+                    <strong>Timeline settings</strong>
+                    <span>Publishes the configured values at the specified offsets.</span>
+                  </div>
                   <button onclick="addTimelinePoint('${sensor.id}','${metric.id}')">+ Point</button>
                 </div>
-                ${(metric.timeline||[]).sort((a,b)=>a.offsetSeconds-b.offsetSeconds).map((point,index)=>`
-                  <div class="timeline-point">
-                    <label>At <input type="number" min="0" value="${point.offsetSeconds}" onchange="updateTimelinePoint('${sensor.id}','${metric.id}',${index},'offsetSeconds',Number(this.value))"> s</label>
-                    <label>Value <input value="${esc(point.value)}" onchange="updateTimelinePoint('${sensor.id}','${metric.id}',${index},'value',this.value)"></label>
-                    <button class="danger" onclick="deleteTimelinePoint('${sensor.id}','${metric.id}',${index})">×</button>
-                  </div>`).join("")}
+                <div class="timeline-points">
+                  ${(metric.timeline||[]).sort((a,b)=>a.offsetSeconds-b.offsetSeconds).map((point,index)=>`
+                    <div class="timeline-point">
+                      <label>At <input type="number" min="0" value="${point.offsetSeconds}" onchange="updateTimelinePoint('${sensor.id}','${metric.id}',${index},'offsetSeconds',Number(this.value))"> s</label>
+                      <label>Value <input value="${esc(point.value)}" onchange="updateTimelinePoint('${sensor.id}','${metric.id}',${index},'value',this.value)"></label>
+                      <button class="danger" onclick="deleteTimelinePoint('${sensor.id}','${metric.id}',${index})">×</button>
+                    </div>`).join("")}
+                  ${(metric.timeline||[]).length === 0 ? `<div class="timeline-empty">No timeline points yet. Click <strong>+ Point</strong> to add one.</div>` : ""}
+                </div>
               </div>` : ""}
 
             <div class="topic" data-live-sensor-topic="${esc(sensor.id)}" data-metric-key="${esc(metric.key)}" data-explicit-topic="${esc(metric.topic || "")}">${esc(metric.topic || `${sensor.topicPrefix || current.mqtt.topicPrefix || "sensors/ble_gateway/sensor"}/${metric.key}_${sensor.uid}/state`)}</div>
@@ -2034,7 +2050,18 @@ function commitSensorInput(
 async function action(url){ await api(url,{method:"POST"}); await refresh(); }
 async function sensorAction(id, actionName){ await flushSensorPatch(id); await action(`/api/sensors/${id}/${actionName}`); }
 async function patchSensor(id, body){ await api(`/api/sensors/${id}`,{method:"PATCH",body:JSON.stringify(body)}); await refresh(); }
-async function patchMetric(sid, mid, body){ await api(`/api/sensors/${sid}/metrics/${mid}`,{method:"PATCH",body:JSON.stringify(body)}); await refresh(); }
+async function patchMetric(sid, mid, body, forceRender = false){
+  await api(`/api/sensors/${sid}/metrics/${mid}`,{method:"PATCH",body:JSON.stringify(body)});
+
+  if (forceRender) {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      active.blur();
+    }
+  }
+
+  await refresh();
+}
 
 async function addSensor(){
   const n = current.sensors.length + 1;
