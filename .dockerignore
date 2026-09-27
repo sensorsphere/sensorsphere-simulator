@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+node_modules
+data
+tmp
+recovery
+*.patch
+README.md
+examples

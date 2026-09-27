@@ -1,0 +1,6 @@
+services:
+  sensor-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "sensorsphere-simulator:dev"

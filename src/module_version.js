@@ -1,5 +1,5 @@
 export const MODULE_NAME = "simulator";
-export const MODULE_VERSION = "1.2.1";
+export const MODULE_VERSION = "1.3.0";
 
 export const MODULE_CHANGE_TYPES = [
   "added",
@@ -11,6 +11,24 @@ export const MODULE_CHANGE_TYPES = [
 ];
 
 export const MODULE_CHANGELOG = {
+  "1.3.0": {
+    releasedAt: "2026-09-27T07:56:00+02:00",
+    patch: "Simulator-public-distribution-ghcr-v1.patch",
+    changes: [
+      {
+        type: "added",
+        description: "Public GHCR multi-architecture image publication for linux/amd64 and linux/arm64"
+      },
+      {
+        type: "added",
+        description: "One-command public installer and update workflow preserving Simulator configuration and data"
+      },
+      {
+        type: "changed",
+        description: "Runtime Compose uses the published versioned image while docker-compose.dev.yml preserves local builds"
+      }
+    ]
+  },
   "1.2.1": {
     releasedAt: "2026-08-29T11:21:00+02:00",
     patch: "Simulator-publication-log-table-scroll-v1.patch",

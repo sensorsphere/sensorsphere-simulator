@@ -1,4 +1,4 @@
-# SensorSphere Simulator — SIM-002
+# SensorSphere Simulator
 
 Autonomous MQTT sensor simulator for SensorSphere testing.
 
@@ -16,16 +16,59 @@ Autonomous MQTT sensor simulator for SensorSphere testing.
 - Publication log
 - Docker deployment
 
-## Start
+## Install / update
+
+SensorSphere Simulator is distributed as a public versioned container image.
+A normal installation does not require cloning this repository.
+
+Example:
 
 ```bash
-docker compose up -d --build
+APP_INSTANCE_NAME=FIT \
+SIMULATOR_MQTT_HOST=100.64.0.9 \
+SIMULATOR_MQTT_PORT=1883 \
+WEB_PORT=8090 \
+VERSION=1.3.0 \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere-simulator/master/scripts/install.sh)"
 ```
+
+If `curl` is not available, the same installer can be fetched with `wget`:
+
+```bash
+APP_INSTANCE_NAME=FIT \
+SIMULATOR_MQTT_HOST=100.64.0.9 \
+SIMULATOR_MQTT_PORT=1883 \
+WEB_PORT=8090 \
+VERSION=1.3.0 \
+bash -c "$(wget -qO- https://raw.githubusercontent.com/sensorsphere/sensorsphere-simulator/master/scripts/install.sh)"
+```
+
+The installer uses `$HOME/sensorsphere-simulator` by default. Override it with
+`SIMULATOR_INSTALL_DIR` or `INSTALL_DIR`.
+
+Re-run the same command with a newer `VERSION` to update. The installer:
+
+- preserves the existing `.env` and creates a timestamped backup;
+- preserves the `data/` directory;
+- updates `docker-compose.yml` and `.env.example` from the selected Git tag;
+- pulls `ghcr.io/sensorsphere/sensorsphere-simulator:<VERSION>`;
+- recreates the container and waits for its healthcheck.
+
+The aliases `MQTT_HOST` and `MQTT_PORT` are also accepted and map to
+`SIMULATOR_MQTT_HOST` and `SIMULATOR_MQTT_PORT`.
 
 Open:
 
 ```text
-http://<VPS-IP>:8090
+http://<host>:8090
+```
+
+## Development
+
+For a local source build:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 ## MQTT configuration
